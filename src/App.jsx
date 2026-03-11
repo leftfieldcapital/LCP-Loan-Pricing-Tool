@@ -493,7 +493,7 @@ export default function App() {
 
     y = Math.max(y1, y2) + 8;
 
-    // ── Funding Table ─────────────────────────────────────────────────────────
+    // ── Shared trow / tsep helpers ────────────────────────────────────────────
     const trow = (lbl, sub, val, opts) => {
       opts = opts || {};
       const h = sub ? 11 : 8;
@@ -517,10 +517,52 @@ export default function App() {
       doc.setDrawColor(BRAND_C[0], BRAND_C[1], BRAND_C[2]).setLineWidth(0.5).line(ML, y, W - MR, y);
       y += 3;
     };
-
-    y = sectionHdr("Funding Table", ML, PW, y) + 2;
+    const disclaimer = "Important Notice - Indicative Pricing Only. This summary has been prepared by Leftfield Capital Partners for indicative purposes only. All pricing, fees, rates and terms are indicative and subject to formal credit assessment, satisfactory due diligence, and credit committee approval. This document does not constitute an offer, commitment or guarantee of finance. Leftfield Capital Partners reserves the right to vary or withdraw indicative terms at any time without notice.";
+    const drawDisclaimer = () => {
+      doc.setDrawColor(229, 231, 235).setLineWidth(0.5).line(ML, y, W - MR, y);
+      y += 5;
+      doc.setFont("helvetica", "normal").setFontSize(6.5).setTextColor(GREY_C[0], GREY_C[1], GREY_C[2]);
+      const lines = doc.splitTextToSize(disclaimer, PW);
+      doc.text(lines, ML, y);
+    };
 
     if (isConst) {
+      // ══ CONSTRUCTION: PAGE 1 — LVR Analysis ══════════════════════════════════
+      if (c.grvVal > 0) {
+        y = sectionHdr("LVR Analysis", ML, PW, y) + 2;
+        trow("Target LVR", fmtN(c.grvVal) + " GRV x " + fmtP(c.targetLVRpct, 0) + " = " + fmtN(c.facility), fmtP(c.targetLVRpct), { bold: true });
+        trow("Actual LVR", "Funding total " + fmtN(c.fundingTotal) + " / GRV " + fmtN(c.grvVal), fmtP(c.actualLVR), { bold: true });
+        const diff = c.lvrDiff || 0;
+        const onTgt = Math.abs(diff) < 0.05;
+        const over = diff > 0.05;
+        const posLabel = onTgt ? "On target" : over ? "Over by " + fmtP(Math.abs(diff)) : "Under by " + fmtP(Math.abs(diff));
+        const posBg = (onTgt || !over) ? [209, 250, 229] : [254, 226, 226];
+        const posFg = (onTgt || !over) ? [6, 95, 70] : [153, 27, 27];
+        doc.setFillColor(posBg[0], posBg[1], posBg[2]).roundedRect(ML, y, PW, 10, 2, 2, "F");
+        doc.setFont("helvetica", "bold").setFontSize(8.5).setTextColor(posFg[0], posFg[1], posFg[2]);
+        txt("Position vs Target", ML + 6, y + 6.5);
+        txt(posLabel, W - MR - 6, y + 6.5, { align: "right" });
+        y += 16;
+      }
+
+      // ══ CONSTRUCTION: PAGE 2 — Funding Table + Disclaimer ════════════════════
+      doc.addPage();
+      y = 14;
+
+      // Page 2 header — logo + title
+      const logoEl2 = document.querySelector("img[alt='Leftfield Capital Partners']");
+      if (logoEl2 && logoEl2.src) {
+        try { doc.addImage(logoEl2.src, "PNG", ML, y - 3, 52, 19); } catch(e) {}
+      }
+      doc.setFont("helvetica", "bold").setFontSize(11).setTextColor(NAVY_C[0], NAVY_C[1], NAVY_C[2]);
+      txt("Construction Loan — Funding Table", W - MR, y + 5, { align: "right" });
+      doc.setFont("helvetica", "normal").setFontSize(8).setTextColor(GREY_C[0], GREY_C[1], GREY_C[2]);
+      txt("Prepared: " + today, W - MR, y + 11, { align: "right" });
+      y += 22;
+      doc.setDrawColor(BRAND_C[0], BRAND_C[1], BRAND_C[2]).setLineWidth(1.2).line(ML, y, W - MR, y);
+      y += 8;
+
+      y = sectionHdr("Funding Table", ML, PW, y) + 2;
       const settVal = settlementOverride !== "" ? (parseFloat(settlementOverride) || 0) : c.settlementBalancing;
       trow("Settlement (Land Purchase / Refi)", settlementOverride !== "" ? "Manual override" : "Auto-calculated balancing item", fmtN(settVal), { indent: true });
       trow("Application Fee (" + appFeePct + "% + GST)", fmtN(c.appFeeExGST) + " + " + fmtN(c.appFeeGST) + " GST", fmtN(c.appFeeIncGST), { indent: true });
@@ -542,7 +584,12 @@ export default function App() {
       trow("Capitalised Line Fee", fmtP(parseFloat(lineFeeRate)) + " p.a. on full facility x " + facilityTerm + " months", fmtN(c.lineFeeTotal), { indent: true });
       tsep();
       trow("TOTAL FACILITY LIMIT", null, fmtN(c.fundingTotal), { bold: true, highlight: true });
+      y += 8;
+      drawDisclaimer();
+
     } else {
+      // ══ TERM LOAN: single page — Funding Table + Disclaimer ══════════════════
+      y = sectionHdr("Funding Table", ML, PW, y) + 2;
       trow("Application Fee (" + appFeePct + "% + GST)", fmtN(c.appFeeExGST) + " + " + fmtN(c.appFeeGST) + " GST", fmtN(c.appFeeIncGST));
       if (c.hasBroker) trow("Broker Fee (" + brokerFeePct + "% + GST)", fmtN(c.brokerFeeExGST) + " + " + fmtN(c.brokerFeeGST) + " GST", fmtN(c.brokerFeeIncGST));
       trow("Legals & Valuations (inc. GST)", "Editable estimate", fmtN(c.leg));
@@ -553,34 +600,9 @@ export default function App() {
       trow("Net Cashout to Borrower", null, fmtN(c.cashAdvance), { bold: true });
       tsep();
       trow("TOTAL FACILITY LIMIT", null, fmtN(c.facility), { bold: true, highlight: true });
+      y += 8;
+      drawDisclaimer();
     }
-    y += 6;
-
-    // ── LVR Analysis (construction only) ─────────────────────────────────────
-    if (isConst && c.grvVal > 0) {
-      y = sectionHdr("LVR Analysis", ML, PW, y) + 2;
-      trow("Target LVR", fmtN(c.grvVal) + " GRV x " + fmtP(c.targetLVRpct, 0) + " = " + fmtN(c.facility), fmtP(c.targetLVRpct), { bold: true });
-      trow("Actual LVR", "Funding total " + fmtN(c.fundingTotal) + " / GRV " + fmtN(c.grvVal), fmtP(c.actualLVR), { bold: true });
-      const diff = c.lvrDiff || 0;
-      const onTgt = Math.abs(diff) < 0.05;
-      const over = diff > 0.05;
-      const posLabel = onTgt ? "On target" : over ? "Over by " + fmtP(Math.abs(diff)) : "Under by " + fmtP(Math.abs(diff));
-      const posBg = (onTgt || !over) ? [209, 250, 229] : [254, 226, 226];
-      const posFg = (onTgt || !over) ? [6, 95, 70] : [153, 27, 27];
-      doc.setFillColor(posBg[0], posBg[1], posBg[2]).roundedRect(ML, y, PW, 10, 2, 2, "F");
-      doc.setFont("helvetica", "bold").setFontSize(8.5).setTextColor(posFg[0], posFg[1], posFg[2]);
-      txt("Position vs Target", ML + 6, y + 6.5);
-      txt(posLabel, W - MR - 6, y + 6.5, { align: "right" });
-      y += 16;
-    }
-
-    // ── Disclaimer ────────────────────────────────────────────────────────────
-    doc.setDrawColor(229, 231, 235).setLineWidth(0.5).line(ML, y, W - MR, y);
-    y += 5;
-    const disclaimer = "Important Notice - Indicative Pricing Only. This summary has been prepared by Leftfield Capital Partners for indicative purposes only. All pricing, fees, rates and terms are indicative and subject to formal credit assessment, satisfactory due diligence, and credit committee approval. This document does not constitute an offer, commitment or guarantee of finance. Leftfield Capital Partners reserves the right to vary or withdraw indicative terms at any time without notice.";
-    doc.setFont("helvetica", "normal").setFontSize(6.5).setTextColor(GREY_C[0], GREY_C[1], GREY_C[2]);
-    const lines = doc.splitTextToSize(disclaimer, PW);
-    doc.text(lines, ML, y);
 
     const pdfBlob = doc.output("blob");
     const url = URL.createObjectURL(pdfBlob);
