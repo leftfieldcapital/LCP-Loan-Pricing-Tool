@@ -592,7 +592,7 @@ export default function App() {
           <div className="flex" style={{ borderBottom: "1px solid #1A2D42" }}>
             {tabs.map(t => (
               <button key={t} onClick={() => setTab(t)}
-                style={{ flex: 1, padding: "10px 0", border: "none", background: "transparent", cursor: "pointer", fontWeight: tab === t ? 700 : 500, fontSize: 11, letterSpacing: 0.5, textTransform: "uppercase", color: tab === t ? BRAND : "#4A6580", borderBottom: tab === t ? `2px solid ${BRAND}` : "2px solid transparent", transition: "all 0.15s" }}>
+                style={{ flex: 1, padding: "10px 2px", border: "none", background: "transparent", cursor: "pointer", fontWeight: tab === t ? 700 : 500, fontSize: 10, letterSpacing: 0.3, textTransform: "uppercase", color: tab === t ? BRAND : "#4A6580", borderBottom: tab === t ? `2px solid ${BRAND}` : "2px solid transparent", transition: "all 0.15s", whiteSpace: "nowrap" }}>
                 {t}
               </button>
             ))}
@@ -609,7 +609,7 @@ export default function App() {
             {/* Project Details */}
             <div className="bg-white rounded-2xl p-5 shadow-sm">
               <SectionTitle>Project Details</SectionTitle>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field label="Land Value / Purchase Price">
                   <NumInput value={landValue} onChange={setLandValue} />
                 </Field>
@@ -638,7 +638,7 @@ export default function App() {
                 </Field>
               </div>
               {c.facility > 0 && (
-                <div className="mt-3 grid grid-cols-2 gap-2">
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div style={{ background: "#F9FAFB", borderRadius: 8, padding: "8px 12px" }}>
                     <div className="text-xs text-gray-400 mb-0.5">{isConstruction ? "Gross LVR" : "LVR"}</div>
                     <div className="text-sm font-bold" style={{ color: BRAND_DARK }}>{fmtPct(isConstruction ? c.lvr : c.lvr)}</div>
@@ -654,7 +654,7 @@ export default function App() {
             {/* Loan Pricing */}
             <div className="bg-white rounded-2xl p-5 shadow-sm">
               <SectionTitle>Loan Pricing</SectionTitle>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field label="Interest Rate (% p.a.)">
                   <NumInput value={interestRate} onChange={setInterestRate} prefix="%" placeholder="9.25" />
                 </Field>
@@ -663,7 +663,7 @@ export default function App() {
                     <NumInput value={lineFeeRate} onChange={setLineFeeRate} prefix="%" placeholder="1.95" />
                   </Field>
                 )}
-                <Field label="Application Fee (% + GST)">
+                <Field label="App Fee (% + GST)">
                   <NumInput value={appFeePct} onChange={setAppFeePct} prefix="%" placeholder="1.75" />
                 </Field>
                 <Field label="Broker Fee (% + GST)">
@@ -700,7 +700,7 @@ export default function App() {
               <SectionTitle>Term Structure</SectionTitle>
               {isConstruction ? (
                 <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <Field label="Facility Term">
                       <Sel value={facilityTerm} onChange={setFacilityTerm} options={MONTH_OPTS} />
                     </Field>
@@ -725,7 +725,7 @@ export default function App() {
                     ))}
                   </div>
                   <Field label="Draw Schedule">
-                    <div className="grid grid-cols-2 gap-2 mt-1">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
                       {[
                         { value: "scurve", label: "S-Curve", desc: "Slow start, ramps mid" },
                         { value: "equal", label: "Equal Monthly", desc: "Linear draw-down" },
@@ -748,7 +748,7 @@ export default function App() {
                   {/* Interest prepayment option */}
                   <div>
                     <label className={lbl}>Interest Prepayment</label>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {[
                         { value: "full", label: "Prepay Full Term", desc: "All interest capitalised upfront" },
                         { value: "partial", label: "Prepay Partial", desc: "Remainder serviced quarterly" },
@@ -805,8 +805,8 @@ export default function App() {
           <div className="space-y-4">
             <div className="bg-white rounded-2xl p-5 shadow-sm">
               <SectionTitle>Construction &amp; Development Costs</SectionTitle>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Build / Construction Cost">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Field label="Build Cost">
                   <NumInput value={buildCost} onChange={setBuildCost} />
                 </Field>
                 <Field label={`Contingency (${contingencyPct || 5}%)`}>
@@ -815,7 +815,7 @@ export default function App() {
                 <Field label="Professional Fees">
                   <NumInput value={profFees} onChange={setProfFees} />
                 </Field>
-                <Field label="Statutory Fees & Contributions">
+                <Field label="Statutory Fees">
                   <NumInput value={statFees} onChange={setStatFees} />
                 </Field>
                 <Field label="Marketing Costs">
@@ -852,7 +852,7 @@ export default function App() {
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <button onClick={() => setTab("inputs")}
                 style={{ padding: "13px 0", background: "white", color: "#374151", border: "2px solid #E5E7EB", borderRadius: 14, fontWeight: 600, fontSize: 13, cursor: "pointer" }}>← Back</button>
               <button onClick={() => setTab("breakdown")}
@@ -943,7 +943,7 @@ export default function App() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <button onClick={() => setTab("costs")}
                 style={{ padding: "13px 0", background: "white", color: "#374151", border: "2px solid #E5E7EB", borderRadius: 14, fontWeight: 600, fontSize: 13, cursor: "pointer" }}>← Back</button>
               <button onClick={() => setTab("summary")}
@@ -1067,7 +1067,7 @@ export default function App() {
                       <TRow label="Construction Drawdowns" value={fmt(c.build)} indent />
                       {c.cont > 0 && <TRow label={`Contingency (${contingencyPct}%)`} value={fmt(c.cont)} indent />}
                       {c.prof > 0 && <TRow label="Professional Fees" value={fmt(c.prof)} indent />}
-                      {c.stat > 0 && <TRow label="Statutory Fees & Contributions" value={fmt(c.stat)} indent />}
+                      {c.stat > 0 && <TRow label="Statutory Fees" value={fmt(c.stat)} indent />}
                       {c.mkt > 0 && <TRow label="Marketing Costs" value={fmt(c.mkt)} indent />}
                       {c.hasBroker && <TRow label={`Brokerage (${brokerFeePct}% + GST)`} value={fmt(c.brokerFeeIncGST)}
                         sublabel={`${fmt(c.brokerFeeExGST)} + ${fmt(c.brokerFeeGST)} GST`} tag="+ GST" indent />}
