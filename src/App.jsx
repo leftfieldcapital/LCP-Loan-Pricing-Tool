@@ -1245,50 +1245,68 @@ export default function App() {
 
       {/* ── PDF Preview Modal ── */}
       {pdfUrl && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.85)", display: "flex", flexDirection: "column" }}>
-          {/* Modal header */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", background: NAVY, flexShrink: 0 }}>
-            <span style={{ color: BRAND, fontWeight: 700, fontSize: 15 }}>PDF Preview</span>
-            <div style={{ display: "flex", gap: 10 }}>
-              {/* Share / Download button */}
-              <button
-                onClick={async () => {
-                  try {
-                    const res = await fetch(pdfUrl.url);
-                    const blob = await res.blob();
-                    const file = new File([blob], pdfUrl.filename, { type: "application/pdf" });
-                    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-                      await navigator.share({ files: [file], title: pdfUrl.filename });
-                    } else {
+        <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "#525659", display: "flex", flexDirection: "column" }}>
+          {/* Safe area header — sits below iPhone notch/Dynamic Island */}
+          <div style={{
+            background: NAVY,
+            flexShrink: 0,
+            paddingTop: "env(safe-area-inset-top, 14px)",
+            paddingLeft: "env(safe-area-inset-left, 16px)",
+            paddingRight: "env(safe-area-inset-right, 16px)",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 0" }}>
+              <span style={{ color: BRAND, fontWeight: 700, fontSize: 15 }}>PDF Preview</span>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button
+                  onClick={async () => {
+                    try {
+                      const res = await fetch(pdfUrl.url);
+                      const blob = await res.blob();
+                      const file = new File([blob], pdfUrl.filename, { type: "application/pdf" });
+                      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+                        await navigator.share({ files: [file], title: pdfUrl.filename });
+                      } else {
+                        const a = document.createElement("a");
+                        a.href = pdfUrl.url;
+                        a.download = pdfUrl.filename;
+                        a.click();
+                      }
+                    } catch(e) {
                       const a = document.createElement("a");
                       a.href = pdfUrl.url;
                       a.download = pdfUrl.filename;
                       a.click();
                     }
-                  } catch(e) {
-                    const a = document.createElement("a");
-                    a.href = pdfUrl.url;
-                    a.download = pdfUrl.filename;
-                    a.click();
-                  }
-                }}
-                style={{ padding: "8px 18px", background: BRAND, color: NAVY, border: "none", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-                Share / Save
-              </button>
-              {/* Close button */}
-              <button
-                onClick={() => { URL.revokeObjectURL(pdfUrl.url); setPdfUrl(null); }}
-                style={{ padding: "8px 14px", background: "#1A2D42", color: "#9CA3AF", border: "none", borderRadius: 10, fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
-                ✕ Close
-              </button>
+                  }}
+                  style={{ padding: "10px 20px", background: BRAND, color: NAVY, border: "none", borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
+                  Share / Save
+                </button>
+                <button
+                  onClick={() => { URL.revokeObjectURL(pdfUrl.url); setPdfUrl(null); }}
+                  style={{ padding: "10px 16px", background: "#1A2D42", color: "#9CA3AF", border: "none", borderRadius: 10, fontWeight: 600, fontSize: 14, cursor: "pointer" }}>
+                  ✕ Close
+                </button>
+              </div>
             </div>
           </div>
-          {/* PDF iframe */}
-          <iframe
-            src={pdfUrl.url}
-            style={{ flex: 1, width: "100%", border: "none", background: "#525659" }}
-            title="PDF Preview"
-          />
+
+          {/* PDF viewer — scales to fit mobile screen width */}
+          <div style={{ flex: 1, overflow: "auto", display: "flex", flexDirection: "column" }}>
+            <iframe
+              src={pdfUrl.url + "#toolbar=0&view=FitH&zoom=page-width"}
+              style={{
+                flex: 1,
+                width: "100%",
+                minHeight: "100%",
+                border: "none",
+                background: "#525659",
+              }}
+              title="PDF Preview"
+            />
+          </div>
+
+          {/* Bottom safe area spacer for iPhone home indicator */}
+          <div style={{ background: NAVY, height: "env(safe-area-inset-bottom, 0px)", flexShrink: 0 }} />
         </div>
       )}
     </div>
