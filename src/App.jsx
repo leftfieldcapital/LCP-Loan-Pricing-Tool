@@ -521,15 +521,10 @@ export default function App() {
     const drawDisclaimer = () => {
       doc.setDrawColor(229, 231, 235).setLineWidth(0.5).line(ML, y, W - MR, y);
       y += 5;
-      // Render full disclaimer as normal text, then overdraw bold prefix on first line
-      const fullText = "Important Notice \u2014 Indicative Pricing Only. This summary has been prepared by Leftfield Capital Partners for indicative purposes only. All pricing, fees, rates and terms are indicative and subject to formal credit assessment, satisfactory due diligence, and credit committee approval. This document does not constitute an offer, commitment or guarantee of finance. Leftfield Capital Partners reserves the right to vary or withdraw indicative terms at any time without notice. Applicants should seek independent legal and financial advice before proceeding. \u00A9 Leftfield Capital Partners 2026";
+      const fullText = "Important Notice - Indicative Pricing Only. This summary has been prepared by Leftfield Capital Partners for indicative purposes only. All pricing, fees, rates and terms are indicative and subject to formal credit assessment, satisfactory due diligence, and credit committee approval. This document does not constitute an offer, commitment or guarantee of finance. Leftfield Capital Partners reserves the right to vary or withdraw indicative terms at any time without notice. Applicants should seek independent legal and financial advice before proceeding. \u00A9 Leftfield Capital Partners 2026";
       doc.setFont("helvetica", "normal").setFontSize(6.5).setTextColor(GREY_C[0], GREY_C[1], GREY_C[2]);
       const lines = doc.splitTextToSize(fullText, PW);
       doc.text(lines, ML, y);
-      // Overdraw just the bold prefix on the first line
-      const boldPrefix = "Important Notice \u2014 Indicative Pricing Only.";
-      doc.setFont("helvetica", "bold").setFontSize(6.5);
-      doc.text(boldPrefix, ML, y);
     };
 
     if (isConst) {
