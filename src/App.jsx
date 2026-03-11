@@ -379,67 +379,79 @@ export default function App() {
     setPdfLoading(true);
     try {
     const doc = new jsPDF({ unit: "mm", format: "a4" });
-    const W = 210, H = 297;
-    const ML = 15, MR = 15, PW = W - ML - MR;
-    const BRAND_C = [0, 191, 206], NAVY_C = [10, 22, 40], GREY = [107, 114, 128];
+    const W = 210; const ML = 15, MR = 15, PW = W - ML - MR;
+    const BRAND_C = [0, 191, 206], NAVY_C = [10, 22, 40], GREY_C = [107, 114, 128];
     const WHITE_C = [255, 255, 255];
-    const fmtN = (n) => n == null || isNaN(n) ? "—" : "$" + Number(n).toLocaleString("en-AU", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-    const fmtP = (n, d = 2) => (n == null || isNaN(n)) ? "—" : Number(n).toFixed(d) + "%";
+
+    // Safe formatters — never return null/undefined/NaN
+    const safeStr = (v) => (v == null || (typeof v === "number" && isNaN(v))) ? "" : String(v);
+    const fmtN = (n) => {
+      const num = Number(n);
+      if (n == null || isNaN(num)) return "—";
+      return "$" + num.toLocaleString("en-AU", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    };
+    const fmtP = (n, d = 2) => {
+      const num = Number(n);
+      if (n == null || isNaN(num)) return "—";
+      return num.toFixed(d) + "%";
+    };
+    const txt = (str, x, y, opts) => doc.text(safeStr(str), x, y, opts || {});
     const today = new Date().toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" });
 
     let y = 14;
 
     // ── Logo ──────────────────────────────────────────────────────────────────
-    const logoBase64 = document.querySelector("img[alt='Leftfield Capital Partners']")?.src;
-    if (logoBase64) {
-      try { doc.addImage(logoBase64, "PNG", ML, y - 3, 52, 19); } catch(e) {}
+    const logoEl = document.querySelector("img[alt='Leftfield Capital Partners']");
+    if (logoEl && logoEl.src) {
+      try { doc.addImage(logoEl.src, "PNG", ML, y - 3, 52, 19); } catch(e) {}
     }
 
-    // Header right-aligned text
-    doc.setFont("helvetica", "bold").setFontSize(11).setTextColor(...NAVY_C);
-    doc.text(isConst ? "Construction Loan — Indicative Term Sheet" : "Term Loan — Indicative Term Sheet", W - MR, y + 5, { align: "right" });
-    doc.setFont("helvetica", "normal").setFontSize(8).setTextColor(...GREY);
-    doc.text(`Prepared: ${today}`, W - MR, y + 11, { align: "right" });
+    // Header
+    doc.setFont("helvetica", "bold").setFontSize(11).setTextColor(NAVY_C[0], NAVY_C[1], NAVY_C[2]);
+    txt(isConst ? "Construction Loan — Indicative Term Sheet" : "Term Loan — Indicative Term Sheet", W - MR, y + 5, { align: "right" });
+    doc.setFont("helvetica", "normal").setFontSize(8).setTextColor(GREY_C[0], GREY_C[1], GREY_C[2]);
+    txt("Prepared: " + today, W - MR, y + 11, { align: "right" });
     y += 22;
 
     // Teal divider
-    doc.setDrawColor(...BRAND_C).setLineWidth(1.2).line(ML, y, W - MR, y);
+    doc.setDrawColor(BRAND_C[0], BRAND_C[1], BRAND_C[2]).setLineWidth(1.2).line(ML, y, W - MR, y);
     y += 8;
 
     // ── Hero card ─────────────────────────────────────────────────────────────
-    doc.setFillColor(...NAVY_C).roundedRect(ML, y, PW, 28, 4, 4, "F");
-    doc.setFont("helvetica", "normal").setFontSize(7).setTextColor(...BRAND_C);
-    doc.text("TOTAL FACILITY LIMIT", ML + 6, y + 7);
-    doc.setFont("helvetica", "bold").setFontSize(22).setTextColor(...BRAND_C);
-    doc.text(fmtN(isConst ? c.facility : c.facility), ML + 6, y + 18);
+    doc.setFillColor(NAVY_C[0], NAVY_C[1], NAVY_C[2]).roundedRect(ML, y, PW, 28, 4, 4, "F");
+    doc.setFont("helvetica", "normal").setFontSize(7).setTextColor(BRAND_C[0], BRAND_C[1], BRAND_C[2]);
+    txt("TOTAL FACILITY LIMIT", ML + 6, y + 7);
+    doc.setFont("helvetica", "bold").setFontSize(22).setTextColor(BRAND_C[0], BRAND_C[1], BRAND_C[2]);
+    txt(fmtN(c.facility), ML + 6, y + 18);
     if (isConst) {
-      doc.setFont("helvetica", "normal").setFontSize(8).setTextColor([94, 122, 144]);
-      doc.text(`GRV  ${fmtN(c.grvVal)}  ·  Net LVR  ${fmtP(c.lvrNet)}  ·  LTC  ${fmtP(c.ltc)}`, ML + 6, y + 25);
-      doc.setFont("helvetica", "bold").setFontSize(7).setTextColor(...BRAND_C);
-      doc.text(`${fmtP(parseFloat(targetLVR), 0)} of GRV`, W - MR - 6, y + 7, { align: "right" });
+      doc.setFont("helvetica", "normal").setFontSize(8).setTextColor(94, 122, 144);
+      txt("GRV  " + fmtN(c.grvVal) + "  ·  Target LVR  " + fmtP(c.targetLVRpct) + "  ·  Term  " + safeStr(facilityTerm) + " mo", ML + 6, y + 25);
+      doc.setFont("helvetica", "bold").setFontSize(7).setTextColor(BRAND_C[0], BRAND_C[1], BRAND_C[2]);
+      txt(fmtP(parseFloat(targetLVR), 0) + " of GRV", W - MR - 6, y + 7, { align: "right" });
     } else {
-      doc.setFont("helvetica", "normal").setFontSize(8).setTextColor([94, 122, 144]);
-      doc.text(`Net Cashout  ${fmtN(c.cashAdvance)}  ·  ${termMonths} month term  ·  LVR ${fmtP(c.lvr)}`, ML + 6, y + 25);
+      doc.setFont("helvetica", "normal").setFontSize(8).setTextColor(94, 122, 144);
+      txt("Net Cashout  " + fmtN(c.cashAdvance) + "  ·  " + safeStr(termMonths) + " month term  ·  LVR " + fmtP(c.lvr), ML + 6, y + 25);
     }
     y += 34;
 
     // ── Two-column section ────────────────────────────────────────────────────
     const COL = (PW - 6) / 2;
     const sectionHdr = (label, x, w, yPos) => {
-      doc.setFillColor(...NAVY_C).rect(x, yPos, w, 8, "F");
-      doc.setFont("helvetica", "bold").setFontSize(7).setTextColor(...BRAND_C);
-      doc.text(label.toUpperCase(), x + 4, yPos + 5.5);
+      doc.setFillColor(NAVY_C[0], NAVY_C[1], NAVY_C[2]).rect(x, yPos, w, 8, "F");
+      doc.setFont("helvetica", "bold").setFontSize(7).setTextColor(BRAND_C[0], BRAND_C[1], BRAND_C[2]);
+      txt(label.toUpperCase(), x + 4, yPos + 5.5);
       return yPos + 8;
     };
     const miniRow = (lbl, val, sub, x, w, yPos, bold) => {
-      doc.setFillColor(bold ? [248, 250, 252] : WHITE_C).rect(x, yPos, w, sub ? 10 : 7, "F");
-      doc.setFont("helvetica", bold ? "bold" : "normal").setFontSize(8).setTextColor(bold ? [17, 24, 39] : [...GREY]);
-      doc.text(lbl, x + 4, yPos + 5);
-      doc.setFont("helvetica", "bold").setFontSize(8).setTextColor([17, 24, 39]);
-      doc.text(val, x + w - 4, yPos + 5, { align: "right" });
+      doc.setFillColor(...(bold ? [248, 250, 252] : WHITE_C)).rect(x, yPos, w, sub ? 10 : 7, "F");
+      doc.setFont("helvetica", bold ? "bold" : "normal").setFontSize(8)
+         .setTextColor(bold ? 17 : GREY_C[0], bold ? 24 : GREY_C[1], bold ? 39 : GREY_C[2]);
+      txt(safeStr(lbl), x + 4, yPos + 5);
+      doc.setFont("helvetica", "bold").setFontSize(8).setTextColor(17, 24, 39);
+      txt(safeStr(val), x + w - 4, yPos + 5, { align: "right" });
       if (sub) {
-        doc.setFont("helvetica", "normal").setFontSize(6.5).setTextColor(...GREY);
-        doc.text(sub, x + 4, yPos + 9);
+        doc.setFont("helvetica", "normal").setFontSize(6.5).setTextColor(GREY_C[0], GREY_C[1], GREY_C[2]);
+        txt(safeStr(sub), x + 4, yPos + 9);
       }
       doc.setDrawColor(229, 231, 235).setLineWidth(0.2).line(x, yPos + (sub ? 10 : 7), x + w, yPos + (sub ? 10 : 7));
       return yPos + (sub ? 10 : 7);
@@ -452,25 +464,24 @@ export default function App() {
     if (isConst) {
       y1 = miniRow("Interest Rate", fmtP(parseFloat(interestRate)), "p.a. on drawn balance — capitalised", x1, COL, y1);
       y1 = miniRow("Line Fee", fmtP(parseFloat(lineFeeRate)), "p.a. on full facility — capitalised", x1, COL, y1);
-      y1 = miniRow("Application Fee", `${appFeePct}% + GST`, `${fmtN(c.appFeeExGST)} + ${fmtN(c.appFeeGST)} GST`, x1, COL, y1);
-      if (c.hasBroker) y1 = miniRow("Broker Fee", `${brokerFeePct}% + GST`, `${fmtN(c.brokerFeeExGST)} + ${fmtN(c.brokerFeeGST)} GST`, x1, COL, y1);
-      y1 = miniRow("Construction Period", `${constructionPeriod} months`, null, x1, COL, y1);
-      y1 = miniRow("Tail / Sell-down", `${tailN} months`, null, x1, COL, y1);
-      y1 = miniRow("Facility Term", `${facilityTerm} months`, null, x1, COL, y1, true);
+      y1 = miniRow("Application Fee", appFeePct + "% + GST", fmtN(c.appFeeExGST) + " + " + fmtN(c.appFeeGST) + " GST", x1, COL, y1);
+      if (c.hasBroker) y1 = miniRow("Broker Fee", brokerFeePct + "% + GST", fmtN(c.brokerFeeExGST) + " + " + fmtN(c.brokerFeeGST) + " GST", x1, COL, y1);
+      y1 = miniRow("Construction Period", constructionPeriod + " months", null, x1, COL, y1);
+      y1 = miniRow("Tail / Sell-down", tailN + " months", null, x1, COL, y1);
+      y1 = miniRow("Facility Term", facilityTerm + " months", null, x1, COL, y1, true);
 
-      y2 = miniRow("Land Value", fmtN(parseFloat(landValue)), null, x2, COL, y2);
       y2 = miniRow("GRV (Net)", fmtN(c.grvVal), null, x2, COL, y2);
       y2 = miniRow("Build Cost", fmtN(c.build), null, x2, COL, y2);
-      if (c.cont > 0) y2 = miniRow(`Contingency (${contingencyPct}%)`, fmtN(c.cont), null, x2, COL, y2);
+      if (c.cont > 0) y2 = miniRow("Contingency (" + contingencyPct + "%)", fmtN(c.cont), null, x2, COL, y2);
       if (c.prof > 0) y2 = miniRow("Professional Fees", fmtN(c.prof), null, x2, COL, y2);
       if (c.stat > 0) y2 = miniRow("Statutory Fees", fmtN(c.stat), null, x2, COL, y2);
       if (c.mkt > 0) y2 = miniRow("Marketing", fmtN(c.mkt), null, x2, COL, y2);
-      y2 = miniRow("Legals & Vals", fmtN(c.leg), null, x2, COL, y2);
+      y2 = miniRow("Legals & Vals", fmtN(c.leg), null, x2, COL, y2, true);
     } else {
-      y1 = miniRow("Interest Rate", fmtP(parseFloat(interestRate)), `p.a. — ${prepayMonths} months pre-paid`, x1, COL, y1);
-      y1 = miniRow("Application Fee", `${appFeePct}% + GST`, `${fmtN(c.appFeeExGST)} + ${fmtN(c.appFeeGST)} GST`, x1, COL, y1);
-      if (c.hasBroker) y1 = miniRow("Broker Fee", `${brokerFeePct}% + GST`, `${fmtN(c.brokerFeeExGST)} + ${fmtN(c.brokerFeeGST)} GST`, x1, COL, y1);
-      y1 = miniRow("Loan Term", `${termMonths} months`, null, x1, COL, y1);
+      y1 = miniRow("Interest Rate", fmtP(parseFloat(interestRate)), "p.a. — " + prepayMonths + " months pre-paid", x1, COL, y1);
+      y1 = miniRow("Application Fee", appFeePct + "% + GST", fmtN(c.appFeeExGST) + " + " + fmtN(c.appFeeGST) + " GST", x1, COL, y1);
+      if (c.hasBroker) y1 = miniRow("Broker Fee", brokerFeePct + "% + GST", fmtN(c.brokerFeeExGST) + " + " + fmtN(c.brokerFeeGST) + " GST", x1, COL, y1);
+      y1 = miniRow("Loan Term", termMonths + " months", null, x1, COL, y1);
       y1 = miniRow("LVR", fmtP(c.lvr), null, x1, COL, y1, true);
 
       y2 = miniRow("Security Value (Land)", fmtN(parseFloat(landValue)), null, x2, COL, y2);
@@ -483,47 +494,61 @@ export default function App() {
     y = Math.max(y1, y2) + 8;
 
     // ── Funding Table ─────────────────────────────────────────────────────────
-    const trow = (lbl, sub, val, opts = {}) => {
+    const trow = (lbl, sub, val, opts) => {
+      opts = opts || {};
       const h = sub ? 11 : 8;
       const bg = opts.highlight ? [224, 248, 251] : opts.bold ? [248, 250, 252] : WHITE_C;
-      doc.setFillColor(...bg).rect(ML, y, PW, h, "F");
+      doc.setFillColor(bg[0], bg[1], bg[2]).rect(ML, y, PW, h, "F");
       const indent = opts.indent ? 6 : 0;
       doc.setFont("helvetica", opts.bold ? "bold" : "normal").setFontSize(8).setTextColor(17, 24, 39);
-      doc.text(lbl, ML + 4 + indent, y + 5.5);
-      if (sub) { doc.setFont("helvetica", "normal").setFontSize(6.5).setTextColor(...GREY); doc.text(sub, ML + 4 + indent, y + 9.5); }
-      doc.setFont("helvetica", "bold").setFontSize(8).setTextColor(opts.highlight ? 0 : 17, opts.highlight ? 96 : 24, opts.highlight ? 70 : 39);
-      doc.text(val, W - MR - 4, y + 5.5, { align: "right" });
+      txt(safeStr(lbl), ML + 4 + indent, y + 5.5);
+      if (sub) {
+        doc.setFont("helvetica", "normal").setFontSize(6.5).setTextColor(GREY_C[0], GREY_C[1], GREY_C[2]);
+        txt(safeStr(sub), ML + 4 + indent, y + 9.5);
+      }
+      if (opts.highlight) doc.setTextColor(0, 96, 70);
+      else doc.setTextColor(17, 24, 39);
+      doc.setFont("helvetica", "bold").setFontSize(8);
+      txt(safeStr(val), W - MR - 4, y + 5.5, { align: "right" });
       doc.setDrawColor(229, 231, 235).setLineWidth(0.2).line(ML, y + h, W - MR, y + h);
       y += h;
     };
-    const tsep = () => { doc.setDrawColor(...BRAND_C).setLineWidth(0.5).line(ML, y, W - MR, y); y += 3; };
+    const tsep = () => {
+      doc.setDrawColor(BRAND_C[0], BRAND_C[1], BRAND_C[2]).setLineWidth(0.5).line(ML, y, W - MR, y);
+      y += 3;
+    };
 
     y = sectionHdr("Funding Table", ML, PW, y) + 2;
 
     if (isConst) {
-      const settVal = c.settlementOverride !== "" ? parseFloat(settlementOverride) : c.settlementBalancing;
+      const settVal = settlementOverride !== "" ? (parseFloat(settlementOverride) || 0) : c.settlementBalancing;
       trow("Settlement (Land Purchase / Refi)", settlementOverride !== "" ? "Manual override" : "Auto-calculated balancing item", fmtN(settVal), { indent: true });
-      trow(`Application Fee (${appFeePct}% + GST)`, `${fmtN(c.appFeeExGST)} + ${fmtN(c.appFeeGST)} GST`, fmtN(c.appFeeIncGST), { indent: true });
+      trow("Application Fee (" + appFeePct + "% + GST)", fmtN(c.appFeeExGST) + " + " + fmtN(c.appFeeGST) + " GST", fmtN(c.appFeeIncGST), { indent: true });
       trow("Legals & Valuations (inc. GST)", null, fmtN(c.leg), { indent: true });
       trow("Construction Drawdowns", null, fmtN(c.build), { indent: true });
-      if (c.cont > 0) trow(`Contingency (${contingencyPct}%)`, null, fmtN(c.cont), { indent: true });
+      if (c.cont > 0) trow("Contingency (" + contingencyPct + "%)", null, fmtN(c.cont), { indent: true });
       if (c.prof > 0) trow("Professional Fees", null, fmtN(c.prof), { indent: true });
       if (c.stat > 0) trow("Statutory Fees & Contributions", null, fmtN(c.stat), { indent: true });
       if (c.mkt > 0) trow("Marketing Costs", null, fmtN(c.mkt), { indent: true });
-      if (c.hasBroker) trow(`Brokerage (${brokerFeePct}% + GST)`, `${fmtN(c.brokerFeeExGST)} + ${fmtN(c.brokerFeeGST)} GST`, fmtN(c.brokerFeeIncGST), { indent: true });
+      if (c.hasBroker) trow("Brokerage (" + brokerFeePct + "% + GST)", fmtN(c.brokerFeeExGST) + " + " + fmtN(c.brokerFeeGST) + " GST", fmtN(c.brokerFeeIncGST), { indent: true });
       if (c.other > 0) trow("Other Costs", null, fmtN(c.other), { indent: true });
+      if (c.extraCosts) c.extraCosts.filter(ec => parseFloat(ec.value) > 0).forEach(ec => {
+        trow(safeStr(ec.label) || "Custom Cost", null, fmtN(parseFloat(ec.value)), { indent: true });
+      });
       tsep();
       trow("Sub-Total", null, fmtN(c.subTotal), { bold: true });
       tsep();
-      trow("Capitalised Interest", `${fmtP(parseFloat(interestRate))} p.a. on progressive drawn balance`, fmtN(c.interestTotal), { indent: true });
-      trow("Capitalised Line Fee", `${fmtP(parseFloat(lineFeeRate))} p.a. on full facility × ${facilityTerm} months`, fmtN(c.lineFeeTotal), { indent: true });
+      trow("Capitalised Interest", fmtP(parseFloat(interestRate)) + " p.a. on progressive drawn balance", fmtN(c.interestTotal), { indent: true });
+      trow("Capitalised Line Fee", fmtP(parseFloat(lineFeeRate)) + " p.a. on full facility x " + facilityTerm + " months", fmtN(c.lineFeeTotal), { indent: true });
       tsep();
       trow("TOTAL FACILITY LIMIT", null, fmtN(c.fundingTotal), { bold: true, highlight: true });
     } else {
-      trow(`Application Fee (${appFeePct}% + GST)`, `${fmtN(c.appFeeExGST)} + ${fmtN(c.appFeeGST)} GST`, fmtN(c.appFeeIncGST));
-      if (c.hasBroker) trow(`Broker Fee (${brokerFeePct}% + GST)`, `${fmtN(c.brokerFeeExGST)} + ${fmtN(c.brokerFeeGST)} GST`, fmtN(c.brokerFeeIncGST));
+      trow("Application Fee (" + appFeePct + "% + GST)", fmtN(c.appFeeExGST) + " + " + fmtN(c.appFeeGST) + " GST", fmtN(c.appFeeIncGST));
+      if (c.hasBroker) trow("Broker Fee (" + brokerFeePct + "% + GST)", fmtN(c.brokerFeeExGST) + " + " + fmtN(c.brokerFeeGST) + " GST", fmtN(c.brokerFeeIncGST));
       trow("Legals & Valuations (inc. GST)", "Editable estimate", fmtN(c.leg));
-      trow(prepayOption === "full" ? `Interest Pre-paid (${termMonths} months)` : `Interest Pre-paid (${prepayMonths} months)`, `${fmtP(parseFloat(interestRate))} p.a. × ${prepayOption === "full" ? termMonths : prepayMonths} months`, fmtN(c.interestTotal));
+      const prepaidLabel = prepayOption === "full" ? "Interest Pre-paid (" + termMonths + " months)" : "Interest Pre-paid (" + prepayMonths + " months)";
+      const prepaidSub = fmtP(parseFloat(interestRate)) + " p.a. x " + (prepayOption === "full" ? termMonths : prepayMonths) + " months";
+      trow(prepaidLabel, prepaidSub, fmtN(c.interestTotal));
       tsep();
       trow("Net Cashout to Borrower", null, fmtN(c.cashAdvance), { bold: true });
       tsep();
@@ -534,32 +559,32 @@ export default function App() {
     // ── LVR Analysis (construction only) ─────────────────────────────────────
     if (isConst && c.grvVal > 0) {
       y = sectionHdr("LVR Analysis", ML, PW, y) + 2;
-      trow("Target LVR", `${fmtN(c.grvVal)} GRV × ${fmtP(c.targetLVRpct, 0)} = ${fmtN(c.facility)}`, fmtP(c.targetLVRpct), { bold: true });
-      trow("Actual LVR", `Funding total ${fmtN(c.fundingTotal)} ÷ GRV ${fmtN(c.grvVal)}`, fmtP(c.actualLVR), { bold: true });
-      const diff = c.lvrDiff;
+      trow("Target LVR", fmtN(c.grvVal) + " GRV x " + fmtP(c.targetLVRpct, 0) + " = " + fmtN(c.facility), fmtP(c.targetLVRpct), { bold: true });
+      trow("Actual LVR", "Funding total " + fmtN(c.fundingTotal) + " / GRV " + fmtN(c.grvVal), fmtP(c.actualLVR), { bold: true });
+      const diff = c.lvrDiff || 0;
       const onTgt = Math.abs(diff) < 0.05;
       const over = diff > 0.05;
-      const posLabel = onTgt ? "✓ On target" : over ? `▲ Over by ${fmtP(Math.abs(diff))}` : `▼ Under by ${fmtP(Math.abs(diff))}`;
-      const posBg = onTgt || !over ? [209, 250, 229] : [254, 226, 226];
-      const posFg = onTgt || !over ? [6, 95, 70] : [153, 27, 27];
-      doc.setFillColor(...posBg).roundedRect(ML, y, PW, 10, 2, 2, "F");
-      doc.setFont("helvetica", "bold").setFontSize(8.5).setTextColor(...posFg);
-      doc.text("Position vs Target", ML + 6, y + 6.5);
-      doc.text(posLabel, W - MR - 6, y + 6.5, { align: "right" });
+      const posLabel = onTgt ? "On target" : over ? "Over by " + fmtP(Math.abs(diff)) : "Under by " + fmtP(Math.abs(diff));
+      const posBg = (onTgt || !over) ? [209, 250, 229] : [254, 226, 226];
+      const posFg = (onTgt || !over) ? [6, 95, 70] : [153, 27, 27];
+      doc.setFillColor(posBg[0], posBg[1], posBg[2]).roundedRect(ML, y, PW, 10, 2, 2, "F");
+      doc.setFont("helvetica", "bold").setFontSize(8.5).setTextColor(posFg[0], posFg[1], posFg[2]);
+      txt("Position vs Target", ML + 6, y + 6.5);
+      txt(posLabel, W - MR - 6, y + 6.5, { align: "right" });
       y += 16;
     }
 
     // ── Disclaimer ────────────────────────────────────────────────────────────
     doc.setDrawColor(229, 231, 235).setLineWidth(0.5).line(ML, y, W - MR, y);
     y += 5;
-    const disclaimer = "Important Notice — Indicative Pricing Only. This summary has been prepared by Leftfield Capital Partners for indicative purposes only. All pricing, fees, rates and terms are indicative and subject to formal credit assessment, satisfactory due diligence, and credit committee approval. This document does not constitute an offer, commitment or guarantee of finance. Leftfield Capital Partners reserves the right to vary or withdraw indicative terms at any time without notice. Applicants should seek independent legal and financial advice before proceeding.";
-    doc.setFont("helvetica", "normal").setFontSize(6.5).setTextColor(...GREY);
+    const disclaimer = "Important Notice - Indicative Pricing Only. This summary has been prepared by Leftfield Capital Partners for indicative purposes only. All pricing, fees, rates and terms are indicative and subject to formal credit assessment, satisfactory due diligence, and credit committee approval. This document does not constitute an offer, commitment or guarantee of finance. Leftfield Capital Partners reserves the right to vary or withdraw indicative terms at any time without notice.";
+    doc.setFont("helvetica", "normal").setFontSize(6.5).setTextColor(GREY_C[0], GREY_C[1], GREY_C[2]);
     const lines = doc.splitTextToSize(disclaimer, PW);
     doc.text(lines, ML, y);
 
     const pdfBlob = doc.output("blob");
     const url = URL.createObjectURL(pdfBlob);
-    setPdfUrl({ url, filename: `LCP_${isConst ? "Construction" : "Term"}_Loan_Summary_${today.replace(/ /g, "_")}.pdf` });
+    setPdfUrl({ url, filename: "LCP_" + (isConst ? "Construction" : "Term") + "_Loan_Summary_" + today.replace(/ /g, "_") + ".pdf" });
     } catch(e) { alert("PDF generation failed: " + e.message); } finally { setPdfLoading(false); }
   }, [isConstruction, appFeePct, brokerFeePct, lineFeeRate, constructionPeriod, facilityTerm, tailN, contingencyPct, termMonths, prepayMonths, prepayOption, targetLVR, interestRate, settlementOverride, landValue]);
 
