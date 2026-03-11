@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from "react";
+import jsPDF from "jspdf";
 
 const BRAND = "#00BFCE";
 const BRAND_DARK = "#007A8A";
@@ -120,6 +121,8 @@ function sCurveWeights(n) {
 export default function App() {
   const [loanType, setLoanType] = useState("construction");
   const [tab, setTab] = useState("inputs");
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState(null);
 
   // Shared fields
   const [landValue, setLandValue] = useState("");
@@ -373,16 +376,8 @@ export default function App() {
 
   // ── PDF Generation ──────────────────────────────────────────────────────────
   const generatePDF = useCallback(async (c, isConst) => {
-    const loadJsPDF = () => new Promise((resolve, reject) => {
-      if (window.jspdf) return resolve(window.jspdf.jsPDF);
-      const s = document.createElement("script");
-      s.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
-      s.onload = () => resolve(window.jspdf.jsPDF);
-      s.onerror = reject;
-      document.head.appendChild(s);
-    });
-
-    const jsPDF = await loadJsPDF();
+    setPdfLoading(true);
+    try {
     const doc = new jsPDF({ unit: "mm", format: "a4" });
     const W = 210, H = 297;
     const ML = 15, MR = 15, PW = W - ML - MR;
@@ -562,7 +557,10 @@ export default function App() {
     const lines = doc.splitTextToSize(disclaimer, PW);
     doc.text(lines, ML, y);
 
-    doc.save(`LCP_${isConst ? "Construction" : "Term"}_Loan_Summary_${today.replace(/ /g, "_")}.pdf`);
+    const pdfBlob = doc.output("blob");
+    const url = URL.createObjectURL(pdfBlob);
+    setPdfUrl({ url, filename: `LCP_${isConst ? "Construction" : "Term"}_Loan_Summary_${today.replace(/ /g, "_")}.pdf` });
+    } catch(e) { alert("PDF generation failed: " + e.message); } finally { setPdfLoading(false); }
   }, [isConstruction, appFeePct, brokerFeePct, lineFeeRate, constructionPeriod, facilityTerm, tailN, contingencyPct, termMonths, prepayMonths, prepayOption, targetLVR, interestRate, settlementOverride, landValue]);
 
   return (
@@ -1211,14 +1209,63 @@ export default function App() {
                 style={{ flex: 1, padding: "13px 0", background: "white", color: "#374151", border: "2px solid #E5E7EB", borderRadius: 14, fontWeight: 600, fontSize: 14, cursor: "pointer" }}>
                 ← Edit Inputs
               </button>
-              <button onClick={() => generatePDF(c, isConstruction)}
-                style={{ flex: 1, padding: "13px 0", background: NAVY, color: BRAND, border: "none", borderRadius: 14, fontWeight: 700, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                ⬇ PDF Summary
+              <button onClick={() => generatePDF(c, isConstruction)} disabled={pdfLoading}
+                style={{ flex: 1, padding: "13px 0", background: pdfLoading ? "#1A2D42" : NAVY, color: BRAND, border: "none", borderRadius: 14, fontWeight: 700, fontSize: 14, cursor: pdfLoading ? "wait" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, opacity: pdfLoading ? 0.7 : 1 }}>
+                {pdfLoading ? "Generating..." : "PDF Summary"}
               </button>
             </div>
           </div>
         )}
       </div>
+
+      {/* ── PDF Preview Modal ── */}
+      {pdfUrl && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.85)", display: "flex", flexDirection: "column" }}>
+          {/* Modal header */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", background: NAVY, flexShrink: 0 }}>
+            <span style={{ color: BRAND, fontWeight: 700, fontSize: 15 }}>PDF Preview</span>
+            <div style={{ display: "flex", gap: 10 }}>
+              {/* Share / Download button */}
+              <button
+                onClick={async () => {
+                  try {
+                    const res = await fetch(pdfUrl.url);
+                    const blob = await res.blob();
+                    const file = new File([blob], pdfUrl.filename, { type: "application/pdf" });
+                    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+                      await navigator.share({ files: [file], title: pdfUrl.filename });
+                    } else {
+                      const a = document.createElement("a");
+                      a.href = pdfUrl.url;
+                      a.download = pdfUrl.filename;
+                      a.click();
+                    }
+                  } catch(e) {
+                    const a = document.createElement("a");
+                    a.href = pdfUrl.url;
+                    a.download = pdfUrl.filename;
+                    a.click();
+                  }
+                }}
+                style={{ padding: "8px 18px", background: BRAND, color: NAVY, border: "none", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                Share / Save
+              </button>
+              {/* Close button */}
+              <button
+                onClick={() => { URL.revokeObjectURL(pdfUrl.url); setPdfUrl(null); }}
+                style={{ padding: "8px 14px", background: "#1A2D42", color: "#9CA3AF", border: "none", borderRadius: 10, fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+                ✕ Close
+              </button>
+            </div>
+          </div>
+          {/* PDF iframe */}
+          <iframe
+            src={pdfUrl.url}
+            style={{ flex: 1, width: "100%", border: "none", background: "#525659" }}
+            title="PDF Preview"
+          />
+        </div>
+      )}
     </div>
   );
 }
