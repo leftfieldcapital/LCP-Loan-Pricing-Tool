@@ -517,17 +517,24 @@ export default function App() {
       doc.setDrawColor(BRAND_C[0], BRAND_C[1], BRAND_C[2]).setLineWidth(0.5).line(ML, y, W - MR, y);
       y += 3;
     };
-    const disclaimer = "Important Notice - Indicative Pricing Only. This summary has been prepared by Leftfield Capital Partners for indicative purposes only. All pricing, fees, rates and terms are indicative and subject to formal credit assessment, satisfactory due diligence, and credit committee approval. This document does not constitute an offer, commitment or guarantee of finance. Leftfield Capital Partners reserves the right to vary or withdraw indicative terms at any time without notice.";
+    const DISCLAIMER_TEXT = "Important Notice \u2014 Indicative Pricing Only. This summary has been prepared by Leftfield Capital Partners for indicative purposes only. All pricing, fees, rates and terms are indicative and subject to formal credit assessment, satisfactory due diligence, and credit committee approval. This document does not constitute an offer, commitment or guarantee of finance. Leftfield Capital Partners reserves the right to vary or withdraw indicative terms at any time without notice. Applicants should seek independent legal and financial advice before proceeding. \u00A9 Leftfield Capital Partners 2026";
     const drawDisclaimer = () => {
       doc.setDrawColor(229, 231, 235).setLineWidth(0.5).line(ML, y, W - MR, y);
       y += 5;
-      doc.setFont("helvetica", "normal").setFontSize(6.5).setTextColor(GREY_C[0], GREY_C[1], GREY_C[2]);
-      const lines = doc.splitTextToSize(disclaimer, PW);
+      // Bold "Important Notice — Indicative Pricing Only." prefix
+      doc.setFont("helvetica", "bold").setFontSize(6.5).setTextColor(GREY_C[0], GREY_C[1], GREY_C[2]);
+      const boldPrefix = "Important Notice \u2014 Indicative Pricing Only.";
+      const boldW = doc.getTextWidth(boldPrefix);
+      doc.text(boldPrefix, ML, y);
+      // Rest of disclaimer in normal weight
+      doc.setFont("helvetica", "normal").setFontSize(6.5);
+      const rest = " This summary has been prepared by Leftfield Capital Partners for indicative purposes only. All pricing, fees, rates and terms are indicative and subject to formal credit assessment, satisfactory due diligence, and credit committee approval. This document does not constitute an offer, commitment or guarantee of finance. Leftfield Capital Partners reserves the right to vary or withdraw indicative terms at any time without notice. Applicants should seek independent legal and financial advice before proceeding. \u00A9 Leftfield Capital Partners 2026";
+      const lines = doc.splitTextToSize(boldPrefix + rest, PW);
       doc.text(lines, ML, y);
     };
 
     if (isConst) {
-      // ══ CONSTRUCTION: PAGE 1 — LVR Analysis ══════════════════════════════════
+      // ══ CONSTRUCTION: PAGE 1 — LVR Analysis + Disclaimer ═════════════════════
       if (c.grvVal > 0) {
         y = sectionHdr("LVR Analysis", ML, PW, y) + 2;
         trow("Target LVR", fmtN(c.grvVal) + " GRV x " + fmtP(c.targetLVRpct, 0) + " = " + fmtN(c.facility), fmtP(c.targetLVRpct), { bold: true });
@@ -544,6 +551,9 @@ export default function App() {
         txt(posLabel, W - MR - 6, y + 6.5, { align: "right" });
         y += 16;
       }
+      // Disclaimer at bottom of page 1
+      y += 4;
+      drawDisclaimer();
 
       // ══ CONSTRUCTION: PAGE 2 — Funding Table + Disclaimer ════════════════════
       doc.addPage();
