@@ -1146,19 +1146,8 @@ export default function App() {
                           Legals &amp; Valuations Provision
                           <div className="text-xs text-gray-400 mt-0.5">Editable estimate</div>
                         </td>
-                        <td className="py-2 px-4">
-                          <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
-                            <input
-                              type="text"
-                              value={parseFloat(legalsVals) > 0 ? parseFloat(legalsVals).toLocaleString("en-AU") : legalsVals}
-                              onFocus={(e) => { e.target.type = "number"; e.target.value = legalsVals; }}
-                              onBlur={(e) => { e.target.type = "text"; e.target.value = parseFloat(legalsVals) > 0 ? parseFloat(legalsVals).toLocaleString("en-AU") : ""; }}
-                              onChange={(e) => setLegalsVals(e.target.value.replace(/,/g, ""))}
-                              placeholder="15,000"
-                              className="w-full text-right text-sm font-semibold text-gray-800 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 pl-7 focus:outline-none focus:ring-2 focus:ring-[#00BFCE]"
-                            />
-                          </div>
+                        <td className="py-2 px-4 w-40">
+                          <NumInput value={legalsVals} onChange={setLegalsVals} placeholder="15,000" />
                         </td>
                       </tr>
                       <TRow
@@ -1167,7 +1156,7 @@ export default function App() {
                         sublabel={`${fmtPct(parseFloat(interestRate))} p.a. × ${prepayOption === "full" ? termMonths : prepayMonths} months`}
                       />
                       <TRow separator />
-                      <TRow label="Net Cashout to Borrower" value={fmt(c.cashAdvance)} bold />
+                      <TRow label="Net Cashout to Borrower" sublabel="Auto-calculated balancing item" value={fmt(c.cashAdvance)} bold />
                       <TRow separator />
                       <TRow label="TOTAL FACILITY LIMIT" value={fmt(c.facility)} bold highlight />
                       {prepayOption === "partial" && c.interestServiced > 0 && (
