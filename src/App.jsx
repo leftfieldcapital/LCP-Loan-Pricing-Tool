@@ -136,6 +136,7 @@ export default function App() {
   const [statFees, setStatFees] = useState("");
   const [marketing, setMarketing] = useState("");
   const [otherCosts, setOtherCosts] = useState("");
+  const [extraCosts, setExtraCosts] = useState([]); // [{id, label, value}]
   const [lineFeeRate, setLineFeeRate] = useState("1.95");
   const [facilityTerm, setFacilityTerm] = useState("18");
   const [constructionPeriod, setConstructionPeriod] = useState("12");
@@ -239,6 +240,7 @@ export default function App() {
     const stat = parseFloat(statFees) || 0;
     const mkt = parseFloat(marketing) || 0;
     const other = parseFloat(otherCosts) || 0;
+    const extraTotal = extraCosts.reduce((sum, ec) => sum + (parseFloat(ec.value) || 0), 0);
 
     const lf = (parseFloat(lineFeeRate) || 0) / 100;
     const facMonths = parseInt(facilityTerm) || 18;
@@ -322,7 +324,7 @@ export default function App() {
 
     // Settlement: balancing item = Facility - all other known costs - cap interest - cap line fee
     // If user has manually entered a settlement override, use that and compute actual LVR
-    const knownCosts = appFeeIncGST + brokerFeeIncGST + leg + build + cont + prof + stat + mkt + other;
+    const knownCosts = appFeeIncGST + brokerFeeIncGST + leg + build + cont + prof + stat + mkt + other + extraTotal;
     const settlementBalancing = facility - knownCosts - capInt - capLine;
     const settlementVal = settlementOverride !== "" ? (parseFloat(settlementOverride) || 0) : settlementBalancing;
 
@@ -333,10 +335,10 @@ export default function App() {
     const lvrDiff = actualLVR !== null ? actualLVR - targetLVRpct : null; // positive = over
 
     // Sub-total = settlement + fees + dev costs (excl cap interest/line fee)
-    const subTotal = settlementVal + appFeeIncGST + leg + build + cont + prof + stat + mkt + (brokerPctExGST > 0 ? brokerFeeIncGST : 0) + other;
+    const subTotal = settlementVal + appFeeIncGST + leg + build + cont + prof + stat + mkt + (brokerPctExGST > 0 ? brokerFeeIncGST : 0) + other + extraTotal;
 
     // Development cost breakdown (for reference)
-    const totalDevCost = land + build + cont + prof + stat + mkt + leg + other;
+    const totalDevCost = land + build + cont + prof + stat + mkt + leg + other + extraTotal;
     const lvr = grvVal > 0 && facility > 0 ? lvrPct * 100 : null;
     const lvrNet = grvVal > 0 && totalDevCost > 0 ? (totalDevCost / grvVal) * 100 : null;
     const ltc = totalDevCost > 0 && facility > 0 ? (facility / totalDevCost) * 100 : null;
@@ -345,7 +347,7 @@ export default function App() {
     const day0Total = settlementVal + appFeeIncGST + brokerFeeIncGST + leg;
 
     return {
-      land, build, cont, prof, stat, mkt, leg, other, totalDevCost, grvVal,
+      land, build, cont, prof, stat, mkt, leg, other, extraTotal, extraCosts, totalDevCost, grvVal,
       facility, cashAdvance, subTotal, day0Total,
       settlementVal, settlementBalancing, fundingTotal, actualLVR, targetLVRpct, lvrDiff,
       appFeeExGST, appFeeGST, appFeeIncGST,
@@ -359,7 +361,7 @@ export default function App() {
     };
   }, [
     isConstruction, landValue, legalsVals, grv, targetLVR, interestRate, appFeePct, brokerFeePct,
-    buildCost, contingencyPct, profFees, statFees, marketing, otherCosts,
+    buildCost, contingencyPct, profFees, statFees, marketing, otherCosts, extraCosts,
     lineFeeRate, facilityTerm, constructionPeriod, drawSchedule,
     termMonths, termLVR, prepayOption, prepayMonths, settlementOverride,
   ]);
@@ -805,7 +807,7 @@ export default function App() {
           <div className="space-y-4">
             <div className="bg-white rounded-2xl p-5 shadow-sm">
               <SectionTitle>Construction &amp; Development Costs</SectionTitle>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="flex flex-col gap-3">
                 <Field label="Build Cost">
                   <NumInput value={buildCost} onChange={setBuildCost} />
                 </Field>
@@ -824,9 +826,31 @@ export default function App() {
                 <Field label="Legals & Valuations">
                   <NumInput value={legalsVals} onChange={setLegalsVals} placeholder="20000" />
                 </Field>
-                <Field label="Other Costs" span2>
+                <Field label="Other Costs">
                   <NumInput value={otherCosts} onChange={setOtherCosts} />
                 </Field>
+                {extraCosts.map((ec) => (
+                  <div key={ec.id}>
+                    <div className="flex items-center justify-between mb-1">
+                      <input
+                        type="text"
+                        value={ec.label}
+                        onChange={e => setExtraCosts(prev => prev.map(x => x.id === ec.id ? { ...x, label: e.target.value } : x))}
+                        placeholder="Cost name..."
+                        style={{ background: "transparent", border: "none", outline: "none", fontSize: 11, fontWeight: 600, color: "#6B7280", textTransform: "uppercase", letterSpacing: "0.05em", flex: 1 }}
+                      />
+                      <button
+                        onClick={() => setExtraCosts(prev => prev.filter(x => x.id !== ec.id))}
+                        style={{ background: "none", border: "none", cursor: "pointer", color: "#9CA3AF", fontSize: 16, lineHeight: 1, padding: "0 0 0 8px" }}>✕</button>
+                    </div>
+                    <NumInput value={ec.value} onChange={v => setExtraCosts(prev => prev.map(x => x.id === ec.id ? { ...x, value: v } : x))} />
+                  </div>
+                ))}
+                <button
+                  onClick={() => setExtraCosts(prev => [...prev, { id: Date.now(), label: "Custom Cost", value: "" }])}
+                  style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "11px 0", background: "transparent", border: `2px dashed ${BRAND}`, borderRadius: 12, color: BRAND, fontWeight: 600, fontSize: 13, cursor: "pointer", marginTop: 4 }}>
+                  <span style={{ fontSize: 18, lineHeight: 1 }}>+</span> Add Cost Item
+                </button>
               </div>
             </div>
 
@@ -845,6 +869,9 @@ export default function App() {
                     {c.mkt > 0 && <TRow label="Marketing" value={fmt(c.mkt)} indent />}
                     {c.leg > 0 && <TRow label="Legals & Valuations" value={fmt(c.leg)} indent />}
                     {c.other > 0 && <TRow label="Other" value={fmt(c.other)} indent />}
+                    {c.extraCosts && c.extraCosts.filter(ec => parseFloat(ec.value) > 0).map(ec => (
+                      <TRow key={ec.id} label={ec.label || "Custom Cost"} value={fmt(parseFloat(ec.value))} indent />
+                    ))}
                     <TRow label="Total Development Cost" value={fmt(c.totalDevCost)} bold highlight />
                     {c.grvVal > 0 && <TRow label="Net LVR (Dev Cost / GRV)" value={fmtPct(c.lvrNet)} />}
                   </tbody>
@@ -1072,6 +1099,9 @@ export default function App() {
                       {c.hasBroker && <TRow label={`Brokerage (${brokerFeePct}% + GST)`} value={fmt(c.brokerFeeIncGST)}
                         sublabel={`${fmt(c.brokerFeeExGST)} + ${fmt(c.brokerFeeGST)} GST`} tag="+ GST" indent />}
                       {c.other > 0 && <TRow label="Other Costs" value={fmt(c.other)} indent />}
+                      {c.extraCosts && c.extraCosts.filter(ec => parseFloat(ec.value) > 0).map(ec => (
+                        <TRow key={ec.id} label={ec.label || "Custom Cost"} value={fmt(parseFloat(ec.value))} indent />
+                      ))}
                       <TRow separator />
                       <TRow label="Sub-Total" value={fmt(c.subTotal)} bold />
                       <TRow separator />
