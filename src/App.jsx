@@ -128,7 +128,7 @@ export default function App() {
   const [landValue, setLandValue] = useState("");
   const [grv, setGrv] = useState("");
   const [targetLVR, setTargetLVR] = useState("65");
-  const [interestRate, setInterestRate] = useState("9.25");
+  const [interestRate, setInterestRate] = useState("10.00");
   const [appFeePct, setAppFeePct] = useState("1.75");
   const [brokerFeePct, setBrokerFeePct] = useState("0");
 
@@ -1281,10 +1281,24 @@ export default function App() {
 
           if (isConstruction && facility > 0) {
             const term = parseFloat(facilityTerm) || 1;
+            const conPeriod = parseFloat(constructionPeriod) || term;
             const appFeeExGST = appPct * facility;
             const lineFee = c.lineFeeTotal || 0;
             const capInt = c.interestTotal || 0;
-            const investorCost = ir * cashAdvance * (term / 12);
+
+            // Investor cost: quarterly tranche model
+            // Investors fund progressively each quarter as construction draws occur
+            // Tranche 1 drawn at month 1, Tranche 2 at month 4, etc.
+            // Each tranche = cashAdvance / numTranches, earns interest for remaining months
+            const numTranches = Math.max(1, Math.ceil(conPeriod / 3));
+            const trancheAmt = cashAdvance / numTranches;
+            let investorCost = 0;
+            for (let t = 0; t < numTranches; t++) {
+              const drawnMonth = t * 3 + 1; // months 1, 4, 7, 10...
+              const monthsOutstanding = term - drawnMonth + 1;
+              investorCost += trancheAmt * ir * (Math.max(0, monthsOutstanding) / 12);
+            }
+
             const lcpIncome = appFeeExGST + capInt + lineFee - investorCost;
             lcpReturn = cashAdvance > 0 ? (lcpIncome / cashAdvance) * (12 / term) : null;
             lcpReturnTerm = cashAdvance > 0 ? lcpIncome / cashAdvance : null;
@@ -1294,13 +1308,14 @@ export default function App() {
               { label: "App Fee (ex GST)", value: appFeeExGST, note: appFeePct + "% × " + fmt(facility) },
               { label: "Capitalised Interest", value: capInt, note: interestRate + "% p.a. on drawn balance" },
               { label: "Capitalised Line Fee", value: lineFee, note: lineFeeRate + "% p.a. × " + facilityTerm + " mo" },
-              { label: "Investor Cost", value: -investorCost, note: investorRate + "% p.a. × " + fmt(cashAdvance) + " × " + facilityTerm + " mo" },
+              { label: "Investor Cost", value: -investorCost, note: investorRate + "% p.a. on " + numTranches + " quarterly tranches × " + fmt(trancheAmt) + " each" },
               { label: "Net LCP Income", value: lcpIncome, bold: true },
             ];
           } else if (!isConstruction && facility > 0) {
             const term = parseFloat(termMonths) || 1;
             const appFeeExGST = appPct * facility;
             const intReceived = br * cashAdvance * (term / 12);
+            // Term loan: single tranche funded at settlement
             const investorCost = ir * cashAdvance * (term / 12);
             const nim = intReceived - investorCost;
             const lcpIncome = appFeeExGST + nim;
@@ -1310,8 +1325,8 @@ export default function App() {
             termLabel = termMonths + " month term";
             breakdown = [
               { label: "App Fee (ex GST)", value: appFeeExGST, note: appFeePct + "% × " + fmt(facility) },
-              { label: "Interest Received", value: intReceived, note: interestRate + "% p.a. × " + fmt(cashAdvance) + " × " + term + " mo" },
-              { label: "Investor Cost", value: -investorCost, note: investorRate + "% p.a. × " + fmt(cashAdvance) + " × " + term + " mo" },
+              { label: "Interest Received", value: intReceived, note: interestRate + "% p.a. × " + fmt(cashAdvance) + " × " + (term/12).toFixed(2) + " yrs" },
+              { label: "Investor Cost", value: -investorCost, note: investorRate + "% p.a. × " + fmt(cashAdvance) + " × " + (term/12).toFixed(2) + " yrs (single tranche)" },
               { label: "Net LCP Income", value: lcpIncome, bold: true },
             ];
           }
