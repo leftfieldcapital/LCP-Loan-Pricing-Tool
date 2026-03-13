@@ -285,9 +285,10 @@ export default function App() {
 
       for (let m = 1; m <= facMonths; m++) {
         const conDraw = m <= conMonths ? weights[m - 1] * cashAdvance : 0;
-        drawnBal += conDraw;
+        // Interest on opening balance (before draw lands) — matches spreadsheet methodology
         const intCharge = (drawnBal + capitalised) * monthlyIR;
         const lfCharge = facility * monthlyLF;
+        drawnBal += conDraw;
         capitalised += intCharge + lfCharge;
         rows.push({
           month: m,
