@@ -155,6 +155,10 @@ export default function App() {
   // Construction settlement override (balancing item)
   const [settlementOverride, setSettlementOverride] = useState("");
 
+  // Internal returns check (not in PDF)
+  const [investorRate, setInvestorRate] = useState("9.25");
+  const [minReturn, setMinReturn] = useState("2.00");
+
   const isConstruction = loanType === "construction";
 
   // Legals provision: fixed defaults, editable
@@ -369,7 +373,7 @@ export default function App() {
     termMonths, termLVR, prepayOption, prepayMonths, settlementOverride,
   ]);
 
-  const tabs = isConstruction ? ["inputs", "costs", "breakdown", "summary"] : ["inputs", "summary"];
+  const tabs = isConstruction ? ["inputs", "costs", "breakdown", "summary", "check"] : ["inputs", "summary", "check"];
   const tailN = Math.max(0, parseInt(facilityTerm) - parseInt(constructionPeriod));
   const prepaidN = parseInt(prepayMonths) || 0;
   const servicedN = Math.max(0, (parseInt(termMonths) || 0) - prepaidN);
@@ -1257,6 +1261,176 @@ export default function App() {
           </div>
         )}
       </div>
+
+
+        {/* ══════════ CHECK TAB ══════════ */}
+        {tab === "check" && (() => {
+          const ir = (parseFloat(investorRate) || 0) / 100;
+          const br = (parseFloat(interestRate) || 0) / 100;
+          const appPct = (parseFloat(appFeePct) || 0) / 100;
+          const minR = (parseFloat(minReturn) || 2) / 100;
+          const facility = c.facility || 0;
+          const cashAdvance = c.cashAdvance || 0;
+
+          let lcpReturn = null;
+          let lcpReturnTerm = null;
+          let lcpIncomeFinal = null;
+          let termLabel = "";
+          let breakdown = [];
+
+          if (isConstruction && facility > 0) {
+            const term = parseFloat(facilityTerm) || 1;
+            const appFeeExGST = appPct * facility;
+            const lineFee = c.lineFeeTotal || 0;
+            const capInt = c.interestTotal || 0;
+            const investorCost = ir * cashAdvance * (term / 12);
+            const lcpIncome = appFeeExGST + capInt + lineFee - investorCost;
+            lcpReturn = cashAdvance > 0 ? (lcpIncome / cashAdvance) * (12 / term) : null;
+            lcpReturnTerm = cashAdvance > 0 ? lcpIncome / cashAdvance : null;
+            lcpIncomeFinal = lcpIncome;
+            termLabel = facilityTerm + " month term";
+            breakdown = [
+              { label: "App Fee (ex GST)", value: appFeeExGST, note: appFeePct + "% × " + fmt(facility) },
+              { label: "Capitalised Interest", value: capInt, note: interestRate + "% p.a. on drawn balance" },
+              { label: "Capitalised Line Fee", value: lineFee, note: lineFeeRate + "% p.a. × " + facilityTerm + " mo" },
+              { label: "Investor Cost", value: -investorCost, note: investorRate + "% p.a. × " + fmt(cashAdvance) + " × " + facilityTerm + " mo" },
+              { label: "Net LCP Income", value: lcpIncome, bold: true },
+            ];
+          } else if (!isConstruction && facility > 0) {
+            const term = parseFloat(termMonths) || 1;
+            const appFeeExGST = appPct * facility;
+            const intReceived = br * cashAdvance * (term / 12);
+            const investorCost = ir * cashAdvance * (term / 12);
+            const nim = intReceived - investorCost;
+            const lcpIncome = appFeeExGST + nim;
+            lcpReturn = cashAdvance > 0 ? (lcpIncome / cashAdvance) * (12 / term) : null;
+            lcpReturnTerm = cashAdvance > 0 ? lcpIncome / cashAdvance : null;
+            lcpIncomeFinal = lcpIncome;
+            termLabel = termMonths + " month term";
+            breakdown = [
+              { label: "App Fee (ex GST)", value: appFeeExGST, note: appFeePct + "% × " + fmt(facility) },
+              { label: "Interest Received", value: intReceived, note: interestRate + "% p.a. × " + fmt(cashAdvance) + " × " + term + " mo" },
+              { label: "Investor Cost", value: -investorCost, note: investorRate + "% p.a. × " + fmt(cashAdvance) + " × " + term + " mo" },
+              { label: "Net LCP Income", value: lcpIncome, bold: true },
+            ];
+          }
+
+          const passes = lcpReturn !== null && lcpReturn >= minR;
+          const shortfall = lcpReturn !== null ? minR - lcpReturn : null;
+
+          const suggestions = [];
+          if (!passes && lcpReturn !== null && facility > 0 && cashAdvance > 0) {
+            const term = parseFloat(isConstruction ? facilityTerm : termMonths) || 1;
+            const rateIncrease = shortfall;
+            suggestions.push({ lever: "Interest Rate", current: interestRate + "%", change: "+" + (rateIncrease * 100).toFixed(2) + "%", newVal: ((br + rateIncrease) * 100).toFixed(2) + "%", icon: "↑" });
+            const appFeeIncrease = (shortfall * cashAdvance * term / 12) / facility;
+            suggestions.push({ lever: "App Fee", current: appFeePct + "%", change: "+" + (appFeeIncrease * 100).toFixed(2) + "%", newVal: ((appPct + appFeeIncrease) * 100).toFixed(2) + "%", icon: "$" });
+            if (isConstruction) {
+              const lf = (parseFloat(lineFeeRate) || 0) / 100;
+              const lineFeeIncrease = shortfall * cashAdvance / facility;
+              suggestions.push({ lever: "Line Fee", current: lineFeeRate + "%", change: "+" + (lineFeeIncrease * 100).toFixed(2) + "%", newVal: ((lf + lineFeeIncrease) * 100).toFixed(2) + "%", icon: "%" });
+            }
+          }
+
+          return (
+            <div className="space-y-4">
+              <div style={{ background: "#0A1628", borderRadius: 16, padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div>
+                  <div style={{ color: "#00BFCE", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Internal Use Only</div>
+                  <div style={{ color: "white", fontSize: 13, fontWeight: 600 }}>LCP Returns Check</div>
+                  <div style={{ color: "#4A6580", fontSize: 11, marginTop: 2 }}>Not included in PDF output</div>
+                </div>
+                {lcpReturn !== null ? (
+                  <div style={{ background: passes ? "#D1FAE5" : "#FEE2E2", borderRadius: 50, width: 64, height: 64, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+                    <div style={{ fontSize: 22 }}>{passes ? "✓" : "✗"}</div>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: passes ? "#065F46" : "#991B1B" }}>{passes ? "PASS" : "FAIL"}</div>
+                  </div>
+                ) : (
+                  <div style={{ background: "#1A2D42", borderRadius: 50, width: 64, height: 64, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <div style={{ color: "#4A6580", fontSize: 11, fontWeight: 600, textAlign: "center", lineHeight: 1.3 }}>No<br/>data</div>
+                  </div>
+                )}
+              </div>
+
+              <div className="bg-white rounded-2xl p-5 shadow-sm">
+                <SectionTitle>Return Parameters</SectionTitle>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Investor Rate (% p.a.)"><NumInput value={investorRate} onChange={setInvestorRate} prefix="%" placeholder="9.25" /></Field>
+                  <Field label="Min Return Target (% p.a.)"><NumInput value={minReturn} onChange={setMinReturn} prefix="%" placeholder="2.00" /></Field>
+                </div>
+              </div>
+
+              {lcpReturn !== null && (
+                <div className="bg-white rounded-2xl p-5 shadow-sm">
+                  <SectionTitle>LCP Net Return</SectionTitle>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+                    <div style={{ background: "#F9FAFB", borderRadius: 10, padding: "14px 12px", textAlign: "center" }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: "#9CA3AF", marginBottom: 6 }}>Per annum</div>
+                      <div style={{ fontSize: 30, fontWeight: 800, color: passes ? "#065F46" : "#DC2626", lineHeight: 1 }}>{fmtPct(lcpReturn * 100)}</div>
+                      <div style={{ marginTop: 7, display: "inline-flex", alignItems: "center", background: passes ? "#D1FAE5" : "#FEE2E2", borderRadius: 20, padding: "3px 10px" }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: passes ? "#065F46" : "#991B1B" }}>
+                          {passes ? "✓ " + fmtPct((lcpReturn - minR) * 100) + " above" : "✗ " + fmtPct(Math.abs(shortfall) * 100) + " below"}
+                        </span>
+                      </div>
+                    </div>
+                    <div style={{ background: "#F9FAFB", borderRadius: 10, padding: "14px 12px", textAlign: "center" }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: "#9CA3AF", marginBottom: 6 }}>Over {termLabel}</div>
+                      <div style={{ fontSize: 30, fontWeight: 800, color: passes ? "#065F46" : "#DC2626", lineHeight: 1 }}>{fmtPct(lcpReturnTerm * 100)}</div>
+                      <div style={{ marginTop: 7, fontSize: 11, color: "#9CA3AF" }}>{fmt(lcpIncomeFinal)} net income</div>
+                    </div>
+                  </div>
+                  <table className="w-full" style={{ borderTop: "1px solid #F3F4F6" }}>
+                    <tbody>
+                      {breakdown.map((row, i) => (
+                        <tr key={i} style={{ borderBottom: "1px solid #F3F4F6", background: row.bold ? "#F9FAFB" : "white" }}>
+                          <td style={{ padding: "8px 4px", fontSize: 12, fontWeight: row.bold ? 700 : 400, color: row.bold ? "#111827" : "#6B7280" }}>
+                            {row.label}
+                            {row.note && <div style={{ fontSize: 10, color: "#9CA3AF", marginTop: 1 }}>{row.note}</div>}
+                          </td>
+                          <td style={{ padding: "8px 4px", textAlign: "right", fontSize: 12, fontWeight: row.bold ? 700 : 600, color: row.value < 0 ? "#DC2626" : row.bold ? "#111827" : "#374151" }}>
+                            {row.value < 0 ? "−" + fmt(Math.abs(row.value)) : fmt(row.value)}
+                          </td>
+                        </tr>
+                      ))}
+                      <tr style={{ borderTop: "2px solid #E5E7EB", background: passes ? "#F0FDF4" : "#FFF1F2" }}>
+                        <td style={{ padding: "10px 4px", fontSize: 12, fontWeight: 700, color: "#374151" }}>Target ({fmtPct(minR * 100)} p.a. min)</td>
+                        <td style={{ padding: "10px 4px", textAlign: "right", fontSize: 14, fontWeight: 800, color: passes ? "#065F46" : "#DC2626" }}>{fmtPct(lcpReturn * 100)} p.a.</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {!passes && suggestions.length > 0 && lcpReturn !== null && (
+                <div className="bg-white rounded-2xl p-5 shadow-sm">
+                  <SectionTitle>How to Fix It</SectionTitle>
+                  <p style={{ fontSize: 12, color: "#6B7280", marginBottom: 12 }}>Adjust any one of the following to hit the {fmtPct(minR * 100)} p.a. target:</p>
+                  <div className="space-y-3">
+                    {suggestions.map((s, i) => (
+                      <div key={i} style={{ border: "1.5px solid #E5E7EB", borderRadius: 12, padding: "12px 14px", display: "flex", alignItems: "center", gap: 12 }}>
+                        <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#F3F4F6", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: "#374151", flexShrink: 0 }}>{s.icon}</div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: "#111827", marginBottom: 2 }}>{s.lever}</div>
+                          <div style={{ fontSize: 11, color: "#6B7280" }}>Raise from <strong>{s.current}</strong> → <strong style={{ color: "#0A1628" }}>{s.newVal}</strong></div>
+                        </div>
+                        <div style={{ background: "#FEF3C7", color: "#92400E", fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 8, flexShrink: 0 }}>{s.change}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <p style={{ fontSize: 10, color: "#9CA3AF", marginTop: 12 }}>Each suggestion achieves the target in isolation. Interest rate is typically the most efficient lever.</p>
+                </div>
+              )}
+
+              {facility === 0 && (
+                <div className="bg-white rounded-2xl p-8 shadow-sm" style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: 32, marginBottom: 8 }}>📋</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: "#374151", marginBottom: 4 }}>No deal loaded</div>
+                  <div style={{ fontSize: 12, color: "#9CA3AF" }}>Enter loan inputs first to see the returns check.</div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
       {/* ── PDF Preview Modal ── */}
       {pdfUrl && (
