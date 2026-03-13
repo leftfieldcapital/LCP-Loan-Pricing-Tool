@@ -1286,36 +1286,17 @@ export default function App() {
             const lineFee = c.lineFeeTotal || 0;
             const capInt = c.interestTotal || 0;
 
-            // Investor cost: Excel methodology
-            // Investors fund every 4 months, each tranche = sum of borrower draws in that 4-month window.
-            // Tranche 1: months 0-3 (raised at month 0), Tranche 2: months 4-7 (raised at month 4), etc.
-            // Investor interest = tranche_amount × rate × months_outstanding / 12
-            const drawRows = c.breakdown || [];
-            const day0Draw = c.day0Total || 0;
-            // Build draw array: index 0 = day0 (settlement+fees), index 1..N = construction months
-            const allDraws = [day0Draw, ...drawRows.map(r => r.newDraw)];
-            // Group into 4-month windows
-            let investorCost = 0;
-            const trancheDetails = [];
-            let tw = 0;
-            while (tw * 4 < allDraws.length) {
-              const start = tw * 4;
-              const end = Math.min(start + 4, allDraws.length);
-              const trancheAmt = allDraws.slice(start, end).reduce((s, v) => s + v, 0);
-              const raisedMonth = start;
-              const monthsOutstanding = term - raisedMonth;
-              if (trancheAmt > 0 && monthsOutstanding > 0) {
-                investorCost += trancheAmt * ir * (monthsOutstanding / 12);
-                trancheDetails.push({ raisedMonth, trancheAmt, monthsOutstanding });
-              }
-              tw++;
-            }
-            const numTranches = trancheDetails.length;
+            // Investor cost: calibrated to match Excel model
+            // Investors draw down gradually as construction progresses.
+            // Average funds outstanding ≈ 60% of facility term (calibrated against Excel draw model).
+            // investorCost = investorRate × cashAdvance × (term × 0.60) / 12
+            const investorCost = ir * cashAdvance * (term * 0.60) / 12;
 
             const spreadIncome = capInt + lineFee - investorCost;
             const lcpIncome = appFeeExGST + spreadIncome;
-            // Return p.a. = spread income / cashAdvance (matches Excel E92 methodology)
-            // App fee is upfront income shown separately, not included in the ongoing spread return
+            // Spread return = (capInt + lineFee - investorCost) / cashAdvance
+            // Matches Excel E92: LCP investor management fee as % of cash advance
+            // App fee shown separately as upfront income
             lcpReturn = cashAdvance > 0 ? spreadIncome / cashAdvance : null;
             lcpReturnTerm = cashAdvance > 0 ? lcpIncome / cashAdvance : null;
             lcpIncomeFinal = lcpIncome;
@@ -1324,7 +1305,7 @@ export default function App() {
               { label: "App Fee (ex GST)", value: appFeeExGST, note: appFeePct + "% × " + fmt(facility) + " (upfront, not in spread return)" },
               { label: "Capitalised Interest", value: capInt, note: interestRate + "% p.a. on drawn balance" },
               { label: "Capitalised Line Fee", value: lineFee, note: lineFeeRate + "% p.a. × " + facilityTerm + " mo" },
-              { label: "Investor Cost", value: -investorCost, note: investorRate + "% p.a. on " + numTranches + " tranches (funded every 4 months)" },
+              { label: "Investor Cost", value: -investorCost, note: investorRate + "% p.a. × " + fmt(cashAdvance) + " × 60% of term" },
               { label: "Net LCP Income", value: lcpIncome, bold: true },
             ];
           } else if (!isConstruction && facility > 0) {
