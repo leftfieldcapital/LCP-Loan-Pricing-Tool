@@ -257,35 +257,47 @@ export default function App() {
     // Facility = GRV × LVR (already computed above)
     // Cash advance = facility - appFeeIncGST - brokerFeeIncGST - capInt - capLine
     // We compute capInt and capLine using the facility-sized line fee and iterating on the draw base
-    // drawBase = cashAdvance = facility - fees - capInt - capLine
-    // Solve iteratively
+    // Iterative solve — matches Excel methodology:
+    //   cashAdvance = facility - capInt - capLine  (total investor funding = day0 + construction draws)
+    //   day0 = settlement + upfront fees, drawn at month 0
+    //     - if overridden: settlement is fixed, day0 is known
+    //     - if auto: settlement = facility - allDevCosts - capInt - capLine (balancing item, iterated)
+    //   conDrawsTotal = cashAdvance - day0  (spread equally or by s-curve over conMonths)
+    //   Interest month m = openingBalance × rate/12  (draw lands end of month, matching Excel row 62)
 
     const settlementIsOverridden = settlementOverride !== "" && parseFloat(settlementOverride) > 0;
     const settlementOverrideVal = parseFloat(settlementOverride) || 0;
     const knownUpfront = appFeeIncGST + brokerFeeIncGST + leg;
+    // allDevCosts = all costs except cap interest/line fee (used for auto-settlement)
+    const allDevCosts = build + cont + prof + stat + mkt + other + extraTotal + knownUpfront;
 
     let capInt = 0, capLine = 0, breakdown = [];
-    let cashAdvance = facility > 0 ? facility * 0.85 : 0;
+    let cashAdvance = facility > 0 ? facility * 0.90 : 0;
 
-    for (let iter = 0; iter < 25; iter++) {
-      const weights = drawSchedule === "scurve" ? sCurveWeights(conMonths) : Array(conMonths).fill(1 / conMonths);
+    for (let iter = 0; iter < 40; iter++) {
       const monthlyIR = ir / 12;
       const monthlyLF = lf / 12;
 
-      // Day 0: settlement + fees. When settlement is overridden, use that fixed value.
-      // When auto-balancing, settlement = facility - fees - capInt - capLine - cashAdvance
+      // Day 0: settlement + upfront fees
+      // Settlement: fixed override, or auto = facility - allDevCosts - capInt - capLine
       const settlementEst = settlementIsOverridden
         ? settlementOverrideVal
-        : facility - knownUpfront - capInt - capLine - cashAdvance;
-      const day0Draw = Math.max(0, settlementEst) + knownUpfront;
+        : Math.max(0, facility - allDevCosts - capInt - capLine);
+      const day0Draw = settlementEst + knownUpfront;
+
+      // Construction draws = cashAdvance minus day0, spread over construction period
+      const conDrawsTotal = Math.max(0, cashAdvance - day0Draw);
+      const weights = drawSchedule === "scurve"
+        ? sCurveWeights(conMonths)
+        : Array(conMonths).fill(1 / conMonths);
 
       let capitalised = 0;
       let drawnBal = day0Draw;
       const rows = [];
 
       for (let m = 1; m <= facMonths; m++) {
-        const conDraw = m <= conMonths ? weights[m - 1] * cashAdvance : 0;
-        // Interest on opening balance (before draw lands) — matches spreadsheet methodology
+        const conDraw = m <= conMonths ? weights[m - 1] * conDrawsTotal : 0;
+        // Interest on opening balance before draw lands — matches Excel row 62
         const intCharge = (drawnBal + capitalised) * monthlyIR;
         const lfCharge = facility * monthlyLF;
         drawnBal += conDraw;
@@ -300,34 +312,18 @@ export default function App() {
 
       const newCapInt = rows.reduce((s, r) => s + r.interest, 0);
       const newCapLine = rows.reduce((s, r) => s + r.lineFeeChg, 0);
-
-      if (settlementIsOverridden) {
-        // When settlement is fixed, cashAdvance = facility - fees - capInt - capLine (unchanged from facility)
-        // Just iterate to converge cap interest/line fee with the fixed day0 balance
-        const newCashAdv = facility - appFeeIncGST - brokerFeeIncGST - newCapInt - newCapLine;
-        if (Math.abs(newCapInt - capInt) < 0.50) {
-          capInt = newCapInt;
-          capLine = newCapLine;
-          cashAdvance = newCashAdv;
-          breakdown = rows;
-          break;
-        }
+      // cashAdvance = facility - capInt - capLine (Excel definition)
+      const newCashAdv = facility - newCapInt - newCapLine;
+      if (Math.abs(newCashAdv - cashAdvance) < 0.50) {
         capInt = newCapInt;
         capLine = newCapLine;
         cashAdvance = newCashAdv;
-      } else {
-        const newCashAdv = facility - appFeeIncGST - brokerFeeIncGST - newCapInt - newCapLine;
-        if (Math.abs(newCashAdv - cashAdvance) < 0.50) {
-          capInt = newCapInt;
-          capLine = newCapLine;
-          cashAdvance = newCashAdv;
-          breakdown = rows;
-          break;
-        }
-        cashAdvance = newCashAdv;
-        capInt = newCapInt;
-        capLine = newCapLine;
+        breakdown = rows;
+        break;
       }
+      cashAdvance = newCashAdv;
+      capInt = newCapInt;
+      capLine = newCapLine;
     }
 
     // Settlement: balancing item = Facility - all other known costs - cap interest - cap line fee
@@ -1286,17 +1282,14 @@ export default function App() {
             const lineFee = c.lineFeeTotal || 0;
             const capInt = c.interestTotal || 0;
 
-            // Investor cost: calibrated to match Excel model
-            // Investors draw down gradually as construction progresses.
-            // Average funds outstanding ≈ 60% of facility term (calibrated against Excel draw model).
-            // investorCost = investorRate × cashAdvance × (term × 0.60) / 12
+            // Investor cost: cashAdvance = total investor funding (Excel definition: facility - capInt - capLine)
+            // Investors draw down gradually → average outstanding ≈ 60% of facility term
             const investorCost = ir * cashAdvance * (term * 0.60) / 12;
 
             const spreadIncome = capInt + lineFee - investorCost;
             const lcpIncome = appFeeExGST + spreadIncome;
             // Spread return = (capInt + lineFee - investorCost) / cashAdvance
-            // Matches Excel E92: LCP investor management fee as % of cash advance
-            // App fee shown separately as upfront income
+            // Matches Excel E92: LCP investor management fee as % of funds raised
             lcpReturn = cashAdvance > 0 ? spreadIncome / cashAdvance : null;
             lcpReturnTerm = cashAdvance > 0 ? lcpIncome / cashAdvance : null;
             lcpIncomeFinal = lcpIncome;
@@ -1338,7 +1331,7 @@ export default function App() {
             if (isConstruction) {
               // Construction: return = spreadIncome / cashAdvance (no annualisation, matches Excel)
               // shortfall is in same units. To fix via rate: need extra spreadIncome = shortfall * cashAdvance
-              // Extra interest from +x% rate ≈ x * cashAdvance * (weighted avg months / 12) — approx as term/2
+              // neededExtra = additional income needed = shortfall × cashAdvance
               const neededExtra = shortfall * cashAdvance;
               const rateIncrease = neededExtra / (cashAdvance * (term / 2) / 12);
               suggestions.push({ lever: "Interest Rate", current: interestRate + "%", change: "+" + (rateIncrease * 100).toFixed(2) + "%", newVal: ((br + rateIncrease) * 100).toFixed(2) + "%", icon: "↑" });
