@@ -1286,29 +1286,45 @@ export default function App() {
             const lineFee = c.lineFeeTotal || 0;
             const capInt = c.interestTotal || 0;
 
-            // Investor cost: quarterly tranche model
-            // Investors fund progressively each quarter as construction draws occur
-            // Tranche 1 drawn at month 1, Tranche 2 at month 4, etc.
-            // Each tranche = cashAdvance / numTranches, earns interest for remaining months
-            const numTranches = Math.max(1, Math.ceil(conPeriod / 3));
-            const trancheAmt = cashAdvance / numTranches;
+            // Investor cost: Excel methodology
+            // Investors fund every 4 months, each tranche = sum of borrower draws in that 4-month window.
+            // Tranche 1: months 0-3 (raised at month 0), Tranche 2: months 4-7 (raised at month 4), etc.
+            // Investor interest = tranche_amount × rate × months_outstanding / 12
+            const drawRows = c.breakdown || [];
+            const day0Draw = c.day0Total || 0;
+            // Build draw array: index 0 = day0 (settlement+fees), index 1..N = construction months
+            const allDraws = [day0Draw, ...drawRows.map(r => r.newDraw)];
+            // Group into 4-month windows
             let investorCost = 0;
-            for (let t = 0; t < numTranches; t++) {
-              const drawnMonth = t * 3 + 1; // months 1, 4, 7, 10...
-              const monthsOutstanding = term - drawnMonth + 1;
-              investorCost += trancheAmt * ir * (Math.max(0, monthsOutstanding) / 12);
+            const trancheDetails = [];
+            let tw = 0;
+            while (tw * 4 < allDraws.length) {
+              const start = tw * 4;
+              const end = Math.min(start + 4, allDraws.length);
+              const trancheAmt = allDraws.slice(start, end).reduce((s, v) => s + v, 0);
+              const raisedMonth = start;
+              const monthsOutstanding = term - raisedMonth;
+              if (trancheAmt > 0 && monthsOutstanding > 0) {
+                investorCost += trancheAmt * ir * (monthsOutstanding / 12);
+                trancheDetails.push({ raisedMonth, trancheAmt, monthsOutstanding });
+              }
+              tw++;
             }
+            const numTranches = trancheDetails.length;
 
-            const lcpIncome = appFeeExGST + capInt + lineFee - investorCost;
-            lcpReturn = cashAdvance > 0 ? (lcpIncome / cashAdvance) * (12 / term) : null;
+            const spreadIncome = capInt + lineFee - investorCost;
+            const lcpIncome = appFeeExGST + spreadIncome;
+            // Return p.a. = spread income / cashAdvance (matches Excel E92 methodology)
+            // App fee is upfront income shown separately, not included in the ongoing spread return
+            lcpReturn = cashAdvance > 0 ? spreadIncome / cashAdvance : null;
             lcpReturnTerm = cashAdvance > 0 ? lcpIncome / cashAdvance : null;
             lcpIncomeFinal = lcpIncome;
             termLabel = facilityTerm + " month term";
             breakdown = [
-              { label: "App Fee (ex GST)", value: appFeeExGST, note: appFeePct + "% × " + fmt(facility) },
+              { label: "App Fee (ex GST)", value: appFeeExGST, note: appFeePct + "% × " + fmt(facility) + " (upfront, not in spread return)" },
               { label: "Capitalised Interest", value: capInt, note: interestRate + "% p.a. on drawn balance" },
               { label: "Capitalised Line Fee", value: lineFee, note: lineFeeRate + "% p.a. × " + facilityTerm + " mo" },
-              { label: "Investor Cost", value: -investorCost, note: investorRate + "% p.a. on " + numTranches + " quarterly tranches × " + fmt(trancheAmt) + " each" },
+              { label: "Investor Cost", value: -investorCost, note: investorRate + "% p.a. on " + numTranches + " tranches (funded every 4 months)" },
               { label: "Net LCP Income", value: lcpIncome, bold: true },
             ];
           } else if (!isConstruction && facility > 0) {
@@ -1319,7 +1335,8 @@ export default function App() {
             const investorCost = ir * cashAdvance * (term / 12);
             const nim = intReceived - investorCost;
             const lcpIncome = appFeeExGST + nim;
-            lcpReturn = cashAdvance > 0 ? (lcpIncome / cashAdvance) * (12 / term) : null;
+            // Return p.a. = nim / cashAdvance * 12/term (spread only, matching Excel methodology)
+            lcpReturn = cashAdvance > 0 ? (nim / cashAdvance) * (12 / term) : null;
             lcpReturnTerm = cashAdvance > 0 ? lcpIncome / cashAdvance : null;
             lcpIncomeFinal = lcpIncome;
             termLabel = termMonths + " month term";
@@ -1337,14 +1354,25 @@ export default function App() {
           const suggestions = [];
           if (!passes && lcpReturn !== null && facility > 0 && cashAdvance > 0) {
             const term = parseFloat(isConstruction ? facilityTerm : termMonths) || 1;
-            const rateIncrease = shortfall;
-            suggestions.push({ lever: "Interest Rate", current: interestRate + "%", change: "+" + (rateIncrease * 100).toFixed(2) + "%", newVal: ((br + rateIncrease) * 100).toFixed(2) + "%", icon: "↑" });
-            const appFeeIncrease = (shortfall * cashAdvance * term / 12) / facility;
-            suggestions.push({ lever: "App Fee", current: appFeePct + "%", change: "+" + (appFeeIncrease * 100).toFixed(2) + "%", newVal: ((appPct + appFeeIncrease) * 100).toFixed(2) + "%", icon: "$" });
             if (isConstruction) {
+              // Construction: return = spreadIncome / cashAdvance (no annualisation, matches Excel)
+              // shortfall is in same units. To fix via rate: need extra spreadIncome = shortfall * cashAdvance
+              // Extra interest from +x% rate ≈ x * cashAdvance * (weighted avg months / 12) — approx as term/2
+              const neededExtra = shortfall * cashAdvance;
+              const rateIncrease = neededExtra / (cashAdvance * (term / 2) / 12);
+              suggestions.push({ lever: "Interest Rate", current: interestRate + "%", change: "+" + (rateIncrease * 100).toFixed(2) + "%", newVal: ((br + rateIncrease) * 100).toFixed(2) + "%", icon: "↑" });
+              const appFeeIncrease = neededExtra / facility;
+              suggestions.push({ lever: "App Fee", current: appFeePct + "%", change: "+" + (appFeeIncrease * 100).toFixed(2) + "%", newVal: ((appPct + appFeeIncrease) * 100).toFixed(2) + "%", icon: "$" });
               const lf = (parseFloat(lineFeeRate) || 0) / 100;
-              const lineFeeIncrease = shortfall * cashAdvance / facility;
+              const lineFeeIncrease = neededExtra / (facility * term / 12);
               suggestions.push({ lever: "Line Fee", current: lineFeeRate + "%", change: "+" + (lineFeeIncrease * 100).toFixed(2) + "%", newVal: ((lf + lineFeeIncrease) * 100).toFixed(2) + "%", icon: "%" });
+            } else {
+              // Term loan: return = nim / cashAdvance * 12/term
+              const neededExtra = shortfall * cashAdvance * term / 12;
+              const rateIncrease = shortfall;
+              suggestions.push({ lever: "Interest Rate", current: interestRate + "%", change: "+" + (rateIncrease * 100).toFixed(2) + "%", newVal: ((br + rateIncrease) * 100).toFixed(2) + "%", icon: "↑" });
+              const appFeeIncrease = neededExtra / facility;
+              suggestions.push({ lever: "App Fee", current: appFeePct + "%", change: "+" + (appFeeIncrease * 100).toFixed(2) + "%", newVal: ((appPct + appFeeIncrease) * 100).toFixed(2) + "%", icon: "$" });
             }
           }
 
@@ -1381,7 +1409,7 @@ export default function App() {
                   <SectionTitle>LCP Net Return</SectionTitle>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
                     <div style={{ background: "#F9FAFB", borderRadius: 10, padding: "14px 12px", textAlign: "center" }}>
-                      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: "#9CA3AF", marginBottom: 6 }}>Per annum</div>
+                      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: "#9CA3AF", marginBottom: 6 }}>{isConstruction ? "Spread Return" : "Per Annum"}</div>
                       <div style={{ fontSize: 30, fontWeight: 800, color: passes ? "#065F46" : "#DC2626", lineHeight: 1 }}>{fmtPct(lcpReturn * 100)}</div>
                       <div style={{ marginTop: 7, display: "inline-flex", alignItems: "center", background: passes ? "#D1FAE5" : "#FEE2E2", borderRadius: 20, padding: "3px 10px" }}>
                         <span style={{ fontSize: 11, fontWeight: 700, color: passes ? "#065F46" : "#991B1B" }}>
